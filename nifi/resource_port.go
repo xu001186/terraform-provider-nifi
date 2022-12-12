@@ -192,7 +192,7 @@ func ResourcePortDeleteInternal(d *schema.ResourceData, meta interface{}) error 
 	}
 	component := v[0].(map[string]interface{})
 	port_type := component["type"].(string)
-	log.Printf("Deleteing port ********************************%s,%s, %s", port_type, portId)
+	log.Printf("Deleteing port ********************************%s, %s", port_type, portId)
 	// Refresh processor details
 	client := meta.(*Client)
 	port, err := client.GetPort(portId, port_type)

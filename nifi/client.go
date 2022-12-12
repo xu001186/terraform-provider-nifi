@@ -873,7 +873,7 @@ func (c *Client) SetPortState(port *Port, state string) error {
 			}
 		}
 		// Log progress
-		log.Printf("[DEBUG] Checking Port status %d %d...", portId, iteration+1)
+		log.Printf("[DEBUG] Checking Port status %s %d...", portId, iteration+1)
 
 		if maxAttempts-1 == iteration {
 			log.Printf("[DEBUG] Failed to verify Port new status %s", state)
@@ -900,7 +900,7 @@ func (c *Client) DisablePort(port *Port) error {
 func (c *Client) StopConnectionHand(connectionHand *ConnectionHand) error {
 	handType := connectionHand.Type
 	handId := connectionHand.Id
-	log.Printf("[DEBUG] Stop connection hand %s , %d", handType, handId)
+	log.Printf("[DEBUG] Stop connection hand %s , %s", handType, handId)
 	switch handType {
 	case "PROCESSOR":
 		processor, err := c.GetProcessor(handId)
@@ -929,7 +929,7 @@ func (c *Client) StopConnectionHand(connectionHand *ConnectionHand) error {
 		log.Printf("No need to stop Funnel")
 		return nil
 	default:
-		log.Fatal(fmt.Sprintf("[WARN]: not supported connection source/target type : %s", handType))
+		log.Fatalf("[WARN]: not supported connection source/target type : %s", handType)
 	}
 	return nil
 }
@@ -937,7 +937,7 @@ func (c *Client) StopConnectionHand(connectionHand *ConnectionHand) error {
 func (c *Client) StartConnectionHand(connectionHand *ConnectionHand) error {
 	handType := connectionHand.Type
 	handId := connectionHand.Id
-	log.Printf("[DEBUG] Start connection hand %s , %d", handType, handId)
+	log.Printf("[DEBUG] Start connection hand %s , %s", handType, handId)
 	switch handType {
 	case "PROCESSOR":
 		processor, err := c.GetProcessor(handId)

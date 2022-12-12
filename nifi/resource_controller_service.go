@@ -107,7 +107,7 @@ func ResourceControllerServiceUpdate(d *schema.ResourceData, meta interface{}) e
 	if "ENABLED" == controllerService.Component.State {
 		err = client.DisableControllerService(controllerService)
 		if err != nil {
-			return fmt.Errorf("Failed to disable Controller Service: %s", controllerService)
+			return fmt.Errorf("Failed to disable Controller Service: %s", controllerService.Component.Name)
 		}
 	}
 
