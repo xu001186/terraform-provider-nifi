@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/hashicorp/terraform/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func ResourceConnection() *schema.Resource {
@@ -30,12 +30,12 @@ func ResourceConnection() *schema.Resource {
 						"back_pressure_data_size_threshold": {
 							Type:     schema.TypeString,
 							Optional: true,
-							Default: "1 GB",
+							Default:  "1 GB",
 						},
 						"back_pressure_object_threshold": {
 							Type:     schema.TypeInt,
 							Optional: true,
-							Default: 10000,
+							Default:  10000,
 						},
 						"source": {
 							Type:     schema.TypeList,
@@ -362,9 +362,9 @@ func ConnectionToSchema(d *schema.ResourceData, connection *Connection) error {
 	}
 
 	component := []map[string]interface{}{{
-		"parent_group_id": d.Get("parent_group_id").(string),
+		"parent_group_id":                   d.Get("parent_group_id").(string),
 		"back_pressure_data_size_threshold": connection.Component.BackPressureDataSizeThreshold,
-		"back_pressure_object_threshold": connection.Component.BackPressureObjectThreshold,
+		"back_pressure_object_threshold":    connection.Component.BackPressureObjectThreshold,
 		"source": []map[string]interface{}{{
 			"type":     connection.Component.Source.Type,
 			"id":       connection.Component.Source.Id,

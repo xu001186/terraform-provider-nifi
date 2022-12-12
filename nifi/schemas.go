@@ -1,6 +1,6 @@
 package nifi
 
-import "github.com/hashicorp/terraform/helper/schema"
+import "github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
 func SchemaParentGroupId() *schema.Schema {
 	return &schema.Schema{
