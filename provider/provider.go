@@ -76,6 +76,8 @@ func providerConfigure(d *schema.ResourceData, terraformVersion string) (interfa
 		ApiPath:       d.Get("api_path").(string),
 		AdminCertPath: d.Get("admin_cert").(string),
 		AdminKeyPath:  d.Get("admin_key").(string),
+		Username:      d.Get("username").(string),
+		Password:      d.Get("password").(string),
 	}
 	client, err := nifi.NewClient(config)
 	if err != nil {
