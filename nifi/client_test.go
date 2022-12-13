@@ -1,17 +1,24 @@
 package nifi
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestClientProcessGroupCreate(t *testing.T) {
 	config := Config{
-		Host:    "127.0.0.1:8090",
-		ApiPath: "nifi-api",
+		Host:       "yanan001:8443",
+		ApiPath:    "nifi-api",
+		HttpScheme: "https",
+		Username:   "58b28823-bcff-4288-a2fc-22b4701e4368",
+		Password:   "0pBElO7yYCvMGVXWkoZniTzxMZin9Hqf",
 	}
-	client := NewClient(config)
+	client, err := NewClient(config)
+	if err != nil {
+		panic(err)
+	}
 
 	processGroup := ProcessGroup{
 		Revision: Revision{
@@ -19,31 +26,38 @@ func TestClientProcessGroupCreate(t *testing.T) {
 		},
 		Component: ProcessGroupComponent{
 			ParentGroupId: "root",
-			Name:          "kafka_to_s3",
+			Name:          "kafka_to_s3_2",
 			Position: Position{
 				X: 0,
-				Y: 0,
+				Y: 5,
 			},
 		},
 	}
-	client.CreateProcessGroup(&processGroup)
+	err = client.CreateProcessGroup(&processGroup)
+	assert.Equal(t, err, nil)
 	assert.NotEmpty(t, processGroup.Component.Id)
 
 	processGroup2, err := client.GetProcessGroup(processGroup.Component.Id)
 	assert.Equal(t, err, nil)
 	assert.NotEmpty(t, processGroup2.Component.Id)
 
-	processGroup.Component.Name = "kafka_to_s3_1"
+	processGroup.Component.Name = "kafka_to_s3_5"
 	err = client.UpdateProcessGroup(&processGroup)
 	assert.Equal(t, err, nil)
 }
 
 func TestClientProcessorCreate(t *testing.T) {
 	config := Config{
-		Host:    "127.0.0.1:8090",
-		ApiPath: "nifi-api",
+		Host:       "yanan001:8443",
+		ApiPath:    "nifi-api",
+		HttpScheme: "https",
+		Username:   "58b28823-bcff-4288-a2fc-22b4701e4368",
+		Password:   "0pBElO7yYCvMGVXWkoZniTzxMZin9Hqf",
 	}
-	client := NewClient(config)
+	client, err := NewClient(config)
+	if err != nil {
+		panic(err)
+	}
 
 	processor := Processor{
 		Revision: Revision{
@@ -58,6 +72,7 @@ func TestClientProcessorCreate(t *testing.T) {
 				Y: 0,
 			},
 			Config: &ProcessorConfig{
+				ExecutionNode:                    ALL,
 				SchedulingStrategy:               "TIMER_DRIVEN",
 				SchedulingPeriod:                 "0 sec",
 				ConcurrentlySchedulableTaskCount: 1,
@@ -73,7 +88,7 @@ func TestClientProcessorCreate(t *testing.T) {
 			},
 		},
 	}
-	err := client.CreateProcessor(&processor)
+	err = client.CreateProcessor(&processor)
 	assert.Nil(t, err)
 	assert.NotEmpty(t, processor.Component.Id)
 
@@ -99,10 +114,16 @@ func TestClientProcessorCreate(t *testing.T) {
 
 func TestClientConnectionCreate(t *testing.T) {
 	config := Config{
-		Host:    "127.0.0.1:8090",
-		ApiPath: "nifi-api",
+		Host:       "yanan001:8443",
+		ApiPath:    "nifi-api",
+		HttpScheme: "https",
+		Username:   "58b28823-bcff-4288-a2fc-22b4701e4368",
+		Password:   "0pBElO7yYCvMGVXWkoZniTzxMZin9Hqf",
 	}
-	client := NewClient(config)
+	client, err := NewClient(config)
+	if err != nil {
+		panic(err)
+	}
 
 	processor1 := Processor{
 		Revision: Revision{
@@ -116,10 +137,12 @@ func TestClientConnectionCreate(t *testing.T) {
 				X: 0,
 				Y: 0,
 			},
+
 			Config: &ProcessorConfig{
 				SchedulingStrategy:               "TIMER_DRIVEN",
 				SchedulingPeriod:                 "0 sec",
 				ConcurrentlySchedulableTaskCount: 1,
+				ExecutionNode:                    ALL,
 				Properties: map[string]interface{}{
 					"File Size":        "0B",
 					"Batch Size":       "1",
@@ -130,7 +153,7 @@ func TestClientConnectionCreate(t *testing.T) {
 			},
 		},
 	}
-	err := client.CreateProcessor(&processor1)
+	err = client.CreateProcessor(&processor1)
 	assert.Nil(t, err)
 	assert.NotEmpty(t, processor1.Component.Id)
 
@@ -192,7 +215,7 @@ func TestClientControllerServiceCreate(t *testing.T) {
 		Host:    "127.0.0.1:8090",
 		ApiPath: "nifi-api",
 	}
-	client := NewClient(config)
+	client, err := NewClient(config)
 
 	processGroup := ProcessGroup{
 		Revision: Revision{
@@ -207,7 +230,7 @@ func TestClientControllerServiceCreate(t *testing.T) {
 			},
 		},
 	}
-	err := client.CreateProcessGroup(&processGroup)
+	err = client.CreateProcessGroup(&processGroup)
 	assert.Nil(t, err)
 	assert.NotEmpty(t, processGroup.Component.Id)
 
@@ -247,7 +270,7 @@ func TestClientReportingTaskCreate(t *testing.T) {
 		Host:    "127.0.0.1:8090",
 		ApiPath: "nifi-api",
 	}
-	client := NewClient(config)
+	client, err := NewClient(config)
 
 	processGroup := ProcessGroup{
 		Revision: Revision{
@@ -262,7 +285,7 @@ func TestClientReportingTaskCreate(t *testing.T) {
 			},
 		},
 	}
-	err := client.CreateProcessGroup(&processGroup)
+	err = client.CreateProcessGroup(&processGroup)
 	time.Sleep(5000 * time.Millisecond)
 	assert.Nil(t, err)
 	assert.NotEmpty(t, processGroup.Component.Id)

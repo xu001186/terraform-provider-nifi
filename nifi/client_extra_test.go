@@ -13,12 +13,18 @@ import (
 
 func TestClientUserCreate(t *testing.T) {
 	config := Config{
-		Host:          "127.0.0.1:9443",
-		ApiPath:       "nifi-api",
-		AdminCertPath: "/opt/nifi-toolkit/target/nifi-admin.pem",
-		AdminKeyPath:  "/opt/nifi-toolkit/target/nifi-admin.key",
+		Host:       "yanan001:8443",
+		HttpScheme: "https",
+		ApiPath:    "nifi-api",
+		Username:   "58b28823-bcff-4288-a2fc-22b4701e4368",
+		Password:   "0pBElO7yYCvMGVXWkoZniTzxMZin9Hqf",
+		// AdminCertPath: "/opt/nifi-toolkit/target/nifi-admin.pem",
+		// AdminKeyPath:  "/opt/nifi-toolkit/target/nifi-admin.key",
 	}
-	client := NewClient(config)
+	client, err := NewClient(config)
+	if err != nil {
+		panic(err)
+	}
 
 	user := User{
 		Revision: Revision{
@@ -26,14 +32,15 @@ func TestClientUserCreate(t *testing.T) {
 		},
 		Component: UserComponent{
 			ParentGroupId: "root",
-			Identity:      "test_user",
+			Identity:      "test_user1",
 			Position: &Position{
 				X: 0,
 				Y: 0,
 			},
 		},
 	}
-	err := client.CreateUser(&user)
+
+	err = client.CreateUser(&user)
 	assert.Equal(t, err, nil)
 	if err != nil {
 		log.Fatal(err)
@@ -57,7 +64,7 @@ func TestClientUserSearch(t *testing.T) {
 		AdminCertPath: "/opt/nifi-toolkit/target/nifi-admin.pem",
 		AdminKeyPath:  "/opt/nifi-toolkit/target/nifi-admin.key",
 	}
-	client := NewClient(config)
+	client, err := NewClient(config)
 
 	userIds, err := client.GetUserIdsWithIdentity("test_user")
 	log.Println(fmt.Sprintf("%s,%v", userIds, err))
@@ -70,7 +77,7 @@ func TestClientGroupCreate(t *testing.T) {
 		AdminCertPath: "/opt/nifi-toolkit/target/nifi-admin.pem",
 		AdminKeyPath:  "/opt/nifi-toolkit/target/nifi-admin.key",
 	}
-	client := NewClient(config)
+	client, err := NewClient(config)
 	user1 := User{
 		Revision: Revision{
 			Version: 0,
@@ -84,7 +91,7 @@ func TestClientGroupCreate(t *testing.T) {
 			},
 		},
 	}
-	err := client.CreateUser(&user1)
+	err = client.CreateUser(&user1)
 	if err != nil {
 		log.Fatal(err)
 	} else {
@@ -206,7 +213,7 @@ func TestClientRemoteProcessGroupCreate(t *testing.T) {
 		AdminCertPath: "/opt/nifi-toolkit/target/nifi-admin.pem",
 		AdminKeyPath:  "/opt/nifi-toolkit/target/nifi-admin.key",
 	}
-	client := NewClient(config)
+	client, err := NewClient(config)
 
 	processGroup := RemoteProcessGroup{
 		Revision: Revision{
@@ -242,7 +249,7 @@ func TestClientInputPortCreate(t *testing.T) {
 		AdminCertPath: "/opt/nifi-toolkit/target/nifi-admin.pem",
 		AdminKeyPath:  "/opt/nifi-toolkit/target/nifi-admin.key",
 	}
-	client := NewClient(config)
+	client, err := NewClient(config)
 
 	inputPort := Port{
 		Revision: Revision{
@@ -278,7 +285,10 @@ func TestClientOutputPortStop(t *testing.T) {
 		AdminCertPath: "/opt/nifi-toolkit/target/nifi-admin.pem",
 		AdminKeyPath:  "/opt/nifi-toolkit/target/nifi-admin.key",
 	}
-	client := NewClient(config)
+	client, err := NewClient(config)
+	if err != nil {
+		panic(err)
+	}
 	port, error := client.GetPort("cefbdfcc-015e-1000-c243-99e6d5e08d92", "OUTPUT_PORT")
 	log.Printf(fmt.Sprintf("Error: %s", error))
 	error = client.StopPort(port)

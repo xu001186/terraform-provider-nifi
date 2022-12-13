@@ -13,9 +13,9 @@ import (
 )
 
 type Client struct {
-	Config     Config
-	Client     *http.Client
-	HttpScheme string
+	Config Config
+	Client *http.Client
+	auth   *authentication
 	// The mutex is used by the plugin to prevent parallel execution of some update/delete operations.
 	// There are scenarios when updating a connection involves modifying related processors and vice versa.
 	// This breaks Terraform model to some extent but at the same time is unavoidable in NiFi world.
@@ -24,30 +24,88 @@ type Client struct {
 	Lock sync.Mutex
 }
 
-func NewClient(config Config) *Client {
+type authentication struct {
+	token     string
+	tlsConfig *tls.Config
+}
+
+func baseurl(conf Config) string {
+	return fmt.Sprintf("%s://%s/%s", conf.HttpScheme, conf.Host, conf.ApiPath)
+}
+
+func (a *authentication) passwortAuth(conf Config) error {
+	url := fmt.Sprintf("%s/access/token", baseurl(conf))
+	tr := &http.Transport{}
+	if conf.HttpScheme == "https" {
+		tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
+	client := &http.Client{Transport: tr}
+	req := bytes.NewBuffer([]byte(fmt.Sprintf("username=%s&password=%s", conf.Username, conf.Password)))
+	response, err := client.Post(url, "application/x-www-form-urlencoded; charset=UTF-8", req)
+	if err != nil {
+		return err
+	}
+	if response.StatusCode >= 300 {
+		return fmt.Errorf("failed to generate the access token %d", response.StatusCode)
+	}
+	defer response.Body.Close()
+	bodyBytes, err := io.ReadAll(response.Body)
+	if err != nil {
+		return err
+	}
+	a.token = string(bodyBytes)
+	return nil
+}
+
+// Todo: havent test yet in the new version
+func (a *authentication) certAuth(conf Config) error {
+	cert, err := tls.LoadX509KeyPair(conf.AdminCertPath, conf.AdminKeyPath)
+	if err != nil {
+		return err
+	}
+	a.tlsConfig = &tls.Config{
+		Certificates: []tls.Certificate{cert},
+	}
+	return nil
+}
+
+func NewClient(conf Config) (*Client, error) {
 	httpClient := &http.Client{}
-	scheme := config.HttpScheme
-	if config.AdminCertPath != "" && config.AdminKeyPath != "" {
-		cert, err := tls.LoadX509KeyPair(config.AdminCertPath, config.AdminKeyPath)
+	auth := &authentication{}
+
+	if conf.Username != "" && conf.Password != "" {
+		err := auth.passwortAuth(conf)
 		if err != nil {
-			log.Fatal(err)
-		} else {
-			tlsConfig := &tls.Config{
-				Certificates: []tls.Certificate{cert},
-			}
-			tlsConfig.BuildNameToCertificate()
-			tlsConfig.InsecureSkipVerify = true
-			transport := &http.Transport{TLSClientConfig: tlsConfig}
-			httpClient = &http.Client{Transport: transport}
-			scheme = "https"
+			return nil, err
 		}
 	}
-	client := &Client{
-		Config:     config,
-		Client:     httpClient,
-		HttpScheme: scheme,
+	if conf.AdminCertPath != "" && conf.AdminKeyPath != "" {
+		err := auth.certAuth(conf)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return client
+	tlsConfig := auth.tlsConfig
+	if tlsConfig != nil {
+		conf.HttpScheme = "https"
+	}
+
+	if conf.HttpScheme == "https" {
+		if tlsConfig == nil {
+			tlsConfig = &tls.Config{}
+		}
+		tlsConfig.InsecureSkipVerify = true
+		transport := &http.Transport{TLSClientConfig: tlsConfig}
+		httpClient = &http.Client{Transport: transport}
+	}
+
+	client := &Client{
+		Client: httpClient,
+		Config: conf,
+		auth:   auth,
+	}
+
+	return client, nil
 }
 
 // Common section
@@ -62,6 +120,7 @@ type Position struct {
 }
 
 func (c *Client) JsonCall(method string, url string, bodyIn interface{}, bodyOut interface{}) (int, error) {
+
 	var requestBody io.Reader = nil
 	if bodyIn != nil {
 		var buffer = new(bytes.Buffer)
@@ -77,16 +136,25 @@ func (c *Client) JsonCall(method string, url string, bodyIn interface{}, bodyOut
 		request.Header.Add("Content-Type", "application/json; charset=utf-8")
 		request.Header.Add("Accept", "application/json")
 	}
+	if c.auth.token != "" {
+		request.Header.Add("Authorization", fmt.Sprintf("Bearer %s", c.auth.token))
+	}
 
 	response, err := c.Client.Do(request)
-	log.Printf("[DEBUG]: http call to %s resulted in error code: %d", url, response.StatusCode)
 	if err != nil {
 		return 0, err
 	}
-	if response.StatusCode >= 300 {
-		return response.StatusCode, fmt.Errorf("The call has failed with the code of %d", response.StatusCode)
-	}
+
+	log.Printf("[DEBUG]: http call to %s resulted in code: %d", url, response.StatusCode)
 	defer response.Body.Close()
+
+	if response.StatusCode >= 300 {
+		bodyBytes, err := io.ReadAll(response.Body)
+		if err != nil {
+			return 0, err
+		}
+		return response.StatusCode, fmt.Errorf("the call has failed with the code of %d , the result is %s", response.StatusCode, string(bodyBytes))
+	}
 
 	if bodyOut != nil {
 		err = json.NewDecoder(response.Body).Decode(bodyOut)
@@ -113,18 +181,18 @@ type ProcessGroup struct {
 }
 
 func (c *Client) CreateProcessGroup(processGroup *ProcessGroup) error {
-	url := fmt.Sprintf("%s://%s/%s/process-groups/%s/process-groups",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, processGroup.Component.ParentGroupId)
+	url := fmt.Sprintf("%s/process-groups/%s/process-groups",
+		baseurl(c.Config), processGroup.Component.ParentGroupId)
 	_, err := c.JsonCall("POST", url, processGroup, processGroup)
 	return err
 }
 
 func (c *Client) GetProcessGroup(processGroupId string) (*ProcessGroup, error) {
-	url := fmt.Sprintf("%s://%s/%s/process-groups/%s",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, processGroupId)
+	url := fmt.Sprintf("%s/process-groups/%s",
+		baseurl(c.Config), processGroupId)
 	processGroup := ProcessGroup{}
 	code, err := c.JsonCall("GET", url, nil, &processGroup)
-	if 404 == code {
+	if code == 404 {
 		return nil, fmt.Errorf("not_found")
 	}
 	if nil != err {
@@ -134,22 +202,22 @@ func (c *Client) GetProcessGroup(processGroupId string) (*ProcessGroup, error) {
 }
 
 func (c *Client) UpdateProcessGroup(processGroup *ProcessGroup) error {
-	url := fmt.Sprintf("%s://%s/%s/process-groups/%s",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, processGroup.Component.Id)
+	url := fmt.Sprintf("%s/process-groups/%s",
+		baseurl(c.Config), processGroup.Component.Id)
 	_, err := c.JsonCall("PUT", url, processGroup, processGroup)
 	return err
 }
 
 func (c *Client) DeleteProcessGroup(processGroup *ProcessGroup) error {
-	url := fmt.Sprintf("%s://%s/%s/process-groups/%s?version=%d",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, processGroup.Component.Id, processGroup.Revision.Version)
+	url := fmt.Sprintf("%s/process-groups/%s?version=%d",
+		baseurl(c.Config), processGroup.Component.Id, processGroup.Revision.Version)
 	_, err := c.JsonCall("DELETE", url, nil, nil)
 	return err
 }
 
 func (c *Client) GetProcessGroupConnections(processGroupId string) (*Connections, error) {
-	url := fmt.Sprintf("%s://%s/%s/process-groups/%s/connections",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, processGroupId)
+	url := fmt.Sprintf("%s/process-groups/%s/connections",
+		baseurl(c.Config), processGroupId)
 	connections := Connections{}
 	_, err := c.JsonCall("GET", url, nil, &connections)
 	if nil != err {
@@ -165,14 +233,23 @@ type ProcessorRelationship struct {
 	AutoTerminate bool   `json:"autoTerminate"`
 }
 
-type ProcessorConfig struct {
-	SchedulingStrategy               string `json:"schedulingStrategy"`
-	SchedulingPeriod                 string `json:"schedulingPeriod"`
-	ExecutionNode                    string `json:"executionNode"`
-	ConcurrentlySchedulableTaskCount int    `json:"concurrentlySchedulableTaskCount"`
+type ExecutionNode string
+type SchedulingStrategy string
 
-	Properties                  map[string]interface{} `json:"properties"`
-	AutoTerminatedRelationships []string               `json:"autoTerminatedRelationships"`
+const (
+	ALL          ExecutionNode      = "ALL"
+	PRIMARY      ExecutionNode      = "PRIMARY"
+	TIMER_DRIVEN SchedulingStrategy = "TIMER_DRIVEN"
+	CRON_DRIVEN  SchedulingStrategy = "CRON_DRIVEN"
+)
+
+type ProcessorConfig struct {
+	SchedulingStrategy               SchedulingStrategy     `json:"schedulingStrategy"`
+	SchedulingPeriod                 string                 `json:"schedulingPeriod"`
+	ExecutionNode                    ExecutionNode          `json:"executionNode"`
+	ConcurrentlySchedulableTaskCount int                    `json:"concurrentlySchedulableTaskCount"`
+	Properties                       map[string]interface{} `json:"properties"`
+	AutoTerminatedRelationships      []string               `json:"autoTerminatedRelationships"`
 }
 
 type ProcessorComponent struct {
@@ -210,8 +287,10 @@ func (c *Client) CleanupNilProperties(properties map[string]interface{}) error {
 }
 
 func (c *Client) CreateProcessor(processor *Processor) error {
-	url := fmt.Sprintf("%s://%s/%s/process-groups/%s/processors",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, processor.Component.ParentGroupId)
+	url := fmt.Sprintf("%s/process-groups/%s/processors",
+		baseurl(c.Config), processor.Component.ParentGroupId)
+	b, _ := json.Marshal(processor)
+	fmt.Println(string(b))
 	_, err := c.JsonCall("POST", url, processor, processor)
 	if nil != err {
 		return err
@@ -221,11 +300,11 @@ func (c *Client) CreateProcessor(processor *Processor) error {
 }
 
 func (c *Client) GetProcessor(processorId string) (*Processor, error) {
-	url := fmt.Sprintf("%s://%s/%s/processors/%s",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, processorId)
+	url := fmt.Sprintf("%s/processors/%s",
+		baseurl(c.Config), processorId)
 	processor := ProcessorStub()
 	code, err := c.JsonCall("GET", url, nil, &processor)
-	if 404 == code {
+	if code == 404 {
 		return nil, fmt.Errorf("not_found")
 	}
 	if nil != err {
@@ -246,8 +325,8 @@ func (c *Client) GetProcessor(processorId string) (*Processor, error) {
 }
 
 func (c *Client) UpdateProcessor(processor *Processor) error {
-	url := fmt.Sprintf("%s://%s/%s/processors/%s",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, processor.Component.Id)
+	url := fmt.Sprintf("%s/processors/%s",
+		baseurl(c.Config), processor.Component.Id)
 	_, err := c.JsonCall("PUT", url, processor, processor)
 	if nil != err {
 		return err
@@ -257,8 +336,8 @@ func (c *Client) UpdateProcessor(processor *Processor) error {
 }
 
 func (c *Client) DeleteProcessor(processor *Processor) error {
-	url := fmt.Sprintf("%s://%s/%s/processors/%s?version=%d",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, processor.Component.Id, processor.Revision.Version)
+	url := fmt.Sprintf("%s/processors/%s?version=%d",
+		baseurl(c.Config), processor.Component.Id, processor.Revision.Version)
 	_, err := c.JsonCall("DELETE", url, nil, nil)
 	return err
 }
@@ -273,8 +352,8 @@ func (c *Client) SetProcessorState(processor *Processor, state string) error {
 			State: state,
 		},
 	}
-	url := fmt.Sprintf("%s://%s/%s/processors/%s",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, processor.Component.Id)
+	url := fmt.Sprintf("%s/processors/%s",
+		baseurl(c.Config), processor.Component.Id)
 	_, err := c.JsonCall("PUT", url, stateUpdate, processor)
 	return err
 }
@@ -323,18 +402,18 @@ type ConnectionDropRequest struct {
 }
 
 func (c *Client) CreateConnection(connection *Connection) error {
-	url := fmt.Sprintf("%s://%s/%s/process-groups/%s/connections",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, connection.Component.ParentGroupId)
+	url := fmt.Sprintf("%s/process-groups/%s/connections",
+		baseurl(c.Config), connection.Component.ParentGroupId)
 	_, err := c.JsonCall("POST", url, connection, connection)
 	return err
 }
 
 func (c *Client) GetConnection(connectionId string) (*Connection, error) {
-	url := fmt.Sprintf("%s://%s/%s/connections/%s",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, connectionId)
+	url := fmt.Sprintf("%s/connections/%s",
+		baseurl(c.Config), connectionId)
 	connection := Connection{}
 	code, err := c.JsonCall("GET", url, nil, &connection)
-	if 404 == code {
+	if code == 404 {
 		return nil, fmt.Errorf("not_found")
 	}
 	if nil != err {
@@ -344,23 +423,23 @@ func (c *Client) GetConnection(connectionId string) (*Connection, error) {
 }
 
 func (c *Client) UpdateConnection(connection *Connection) error {
-	url := fmt.Sprintf("%s://%s/%s/connections/%s",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, connection.Component.Id)
+	url := fmt.Sprintf("%s/connections/%s",
+		baseurl(c.Config), connection.Component.Id)
 	_, err := c.JsonCall("PUT", url, connection, connection)
 	return err
 }
 
 func (c *Client) DeleteConnection(connection *Connection) error {
-	url := fmt.Sprintf("%s://%s/%s/connections/%s?version=%d",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, connection.Component.Id, connection.Revision.Version)
+	url := fmt.Sprintf("%s/connections/%s?version=%d",
+		baseurl(c.Config), connection.Component.Id, connection.Revision.Version)
 	_, err := c.JsonCall("DELETE", url, nil, nil)
 	return err
 }
 
 func (c *Client) DropConnectionData(connection *Connection) error {
 	// Create a request to drop the contents of the queue in this connection
-	url := fmt.Sprintf("%s://%s/%s/flowfile-queues/%s/drop-requests",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, connection.Component.Id)
+	url := fmt.Sprintf("%s/flowfile-queues/%s/drop-requests",
+		baseurl(c.Config), connection.Component.Id)
 	dropRequest := ConnectionDropRequest{}
 	_, err := c.JsonCall("POST", url, nil, &dropRequest)
 	if nil != err {
@@ -371,8 +450,8 @@ func (c *Client) DropConnectionData(connection *Connection) error {
 	maxAttempts := 10
 	for iteration := 0; iteration < maxAttempts; iteration++ {
 		// Check status of the request
-		url = fmt.Sprintf("%s://%s/%s/flowfile-queues/%s/drop-requests/%s",
-			c.HttpScheme, c.Config.Host, c.Config.ApiPath, connection.Component.Id, dropRequest.DropRequest.Id)
+		url = fmt.Sprintf("%s/flowfile-queues/%s/drop-requests/%s",
+			baseurl(c.Config), connection.Component.Id, dropRequest.DropRequest.Id)
 		_, err = c.JsonCall("GET", url, nil, &dropRequest)
 		if nil != err {
 			continue
@@ -393,8 +472,8 @@ func (c *Client) DropConnectionData(connection *Connection) error {
 	}
 
 	// Remove a request to drop the contents of this connection
-	url = fmt.Sprintf("%s://%s/%s/flowfile-queues/%s/drop-requests/%s",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, connection.Component.Id, dropRequest.DropRequest.Id)
+	url = fmt.Sprintf("%s/flowfile-queues/%s/drop-requests/%s",
+		baseurl(c.Config), connection.Component.Id, dropRequest.DropRequest.Id)
 	_, err = c.JsonCall("DELETE", url, nil, nil)
 	if nil != err {
 		return err
@@ -420,8 +499,8 @@ type ControllerService struct {
 }
 
 func (c *Client) CreateControllerService(controllerService *ControllerService) error {
-	url := fmt.Sprintf("%s://%s/%s/process-groups/%s/controller-services",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, controllerService.Component.ParentGroupId)
+	url := fmt.Sprintf("%s/process-groups/%s/controller-services",
+		baseurl(c.Config), controllerService.Component.ParentGroupId)
 	_, err := c.JsonCall("POST", url, controllerService, controllerService)
 	if nil != err {
 		return err
@@ -431,11 +510,11 @@ func (c *Client) CreateControllerService(controllerService *ControllerService) e
 }
 
 func (c *Client) GetControllerService(controllerServiceId string) (*ControllerService, error) {
-	url := fmt.Sprintf("%s://%s/%s/controller-services/%s",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, controllerServiceId)
+	url := fmt.Sprintf("%s/controller-services/%s",
+		baseurl(c.Config), controllerServiceId)
 	controllerService := ControllerService{}
 	code, err := c.JsonCall("GET", url, nil, &controllerService)
-	if 404 == code {
+	if code == 404 {
 		return nil, fmt.Errorf("not_found")
 	}
 	if nil != err {
@@ -446,8 +525,8 @@ func (c *Client) GetControllerService(controllerServiceId string) (*ControllerSe
 }
 
 func (c *Client) UpdateControllerService(controllerService *ControllerService) error {
-	url := fmt.Sprintf("%s://%s/%s/controller-services/%s",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, controllerService.Component.Id)
+	url := fmt.Sprintf("%s/controller-services/%s",
+		baseurl(c.Config), controllerService.Component.Id)
 	_, err := c.JsonCall("PUT", url, controllerService, controllerService)
 	if nil != err {
 		return err
@@ -457,8 +536,8 @@ func (c *Client) UpdateControllerService(controllerService *ControllerService) e
 }
 
 func (c *Client) DeleteControllerService(controllerService *ControllerService) error {
-	url := fmt.Sprintf("%s://%s/%s/controller-services/%s?version=%d",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, controllerService.Component.Id, controllerService.Revision.Version)
+	url := fmt.Sprintf("%s/controller-services/%s?version=%d",
+		baseurl(c.Config), controllerService.Component.Id, controllerService.Revision.Version)
 	_, err := c.JsonCall("DELETE", url, nil, nil)
 	return err
 }
@@ -473,8 +552,8 @@ func (c *Client) SetControllerServiceState(controllerService *ControllerService,
 			State: state,
 		},
 	}
-	url := fmt.Sprintf("%s://%s/%s/controller-services/%s",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, controllerService.Component.Id)
+	url := fmt.Sprintf("%s/controller-services/%s",
+		baseurl(c.Config), controllerService.Component.Id)
 	_, err := c.JsonCall("PUT", url, stateUpdate, controllerService)
 	return err
 }
@@ -530,17 +609,17 @@ func UserStub() *User {
 	}
 }
 func (c *Client) CreateUser(user *User) error {
-	url := fmt.Sprintf("%s://%s/%s/tenants/users",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath)
+	url := fmt.Sprintf("%s/tenants/users",
+		baseurl(c.Config))
 	_, err := c.JsonCall("POST", url, user, user)
 	return err
 }
 func (c *Client) GetUser(userId string) (*User, error) {
-	url := fmt.Sprintf("%s://%s/%s/tenants/users/%s",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, userId)
+	url := fmt.Sprintf("%s/tenants/users/%s",
+		baseurl(c.Config), userId)
 	user := UserStub()
 	code, err := c.JsonCall("GET", url, nil, &user)
-	if 404 == code {
+	if code == 404 {
 		return nil, fmt.Errorf("not_found")
 	}
 	if nil != err {
@@ -548,18 +627,19 @@ func (c *Client) GetUser(userId string) (*User, error) {
 	}
 	return user, nil
 }
+
 func (c *Client) GetUserIdsWithIdentity(userIden string) ([]string, error) {
 	//https://localhost:9443/nifi-api/tenants/search-results?q=test_user
 
 	searchResult := TenantSearchResult{}
 
-	url := fmt.Sprintf("%s://%s/%s/tenants/search-results?q=%s",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, userIden)
+	url := fmt.Sprintf("%s/tenants/search-results?q=%s",
+		baseurl(c.Config), userIden)
 
 	code, err := c.JsonCall("GET", url, nil, &searchResult)
 
 	userIds := []string{}
-	if 404 == code {
+	if code == 404 {
 		return userIds, fmt.Errorf("not_found")
 	}
 	if nil != err {
@@ -573,8 +653,8 @@ func (c *Client) GetUserIdsWithIdentity(userIden string) ([]string, error) {
 }
 
 func (c *Client) DeleteUser(user *User) error {
-	url := fmt.Sprintf("%s://%s/%s/tenants/users/%s?version=%d",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, user.Component.Id, user.Revision.Version)
+	url := fmt.Sprintf("%s/tenants/users/%s?version=%d",
+		baseurl(c.Config), user.Component.Id, user.Revision.Version)
 	_, err := c.JsonCall("DELETE", url, nil, nil)
 	return err
 }
@@ -609,17 +689,17 @@ func GroupStub() *Group {
 	}
 }
 func (c *Client) CreateGroup(group *Group) error {
-	url := fmt.Sprintf("%s://%s/%s/tenants/user-groups",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath)
+	url := fmt.Sprintf("%s/tenants/user-groups",
+		baseurl(c.Config))
 	_, err := c.JsonCall("POST", url, group, group)
 	return err
 }
 func (c *Client) GetGroup(groupId string) (*Group, error) {
-	url := fmt.Sprintf("%s://%s/%s/tenants/user-groups/%s",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, groupId)
+	url := fmt.Sprintf("%s/tenants/user-groups/%s",
+		baseurl(c.Config), groupId)
 	group := GroupStub()
 	code, err := c.JsonCall("GET", url, nil, &group)
-	if 404 == code {
+	if code == 404 {
 		return nil, fmt.Errorf("not_found")
 	}
 	if nil != err {
@@ -632,13 +712,13 @@ func (c *Client) GetGroupIdsWithIdentity(groupIden string) ([]string, error) {
 
 	searchResult := TenantSearchResult{}
 
-	url := fmt.Sprintf("%s://%s/%s/tenants/search-results?q=%s",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, groupIden)
+	url := fmt.Sprintf("%s/tenants/search-results?q=%s",
+		baseurl(c.Config), groupIden)
 
 	code, err := c.JsonCall("GET", url, nil, &searchResult)
 
 	groupIds := []string{}
-	if 404 == code {
+	if code == 404 {
 		return groupIds, fmt.Errorf("not_found")
 	}
 	if nil != err {
@@ -651,8 +731,8 @@ func (c *Client) GetGroupIdsWithIdentity(groupIden string) ([]string, error) {
 	return groupIds, nil
 }
 func (c *Client) UpdateGroup(group *Group) error {
-	url := fmt.Sprintf("%s://%s/%s/tenants/user-groups/%s",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, group.Component.Id)
+	url := fmt.Sprintf("%s/tenants/user-groups/%s",
+		baseurl(c.Config), group.Component.Id)
 	_, err := c.JsonCall("PUT", url, group, group)
 	if nil != err {
 		return err
@@ -660,8 +740,8 @@ func (c *Client) UpdateGroup(group *Group) error {
 	return nil
 }
 func (c *Client) DeleteGroup(group *Group) error {
-	url := fmt.Sprintf("%s://%s/%s/tenants/user-groups/%s?version=%d",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, group.Component.Id, group.Revision.Version)
+	url := fmt.Sprintf("%s/tenants/user-groups/%s?version=%d",
+		baseurl(c.Config), group.Component.Id, group.Revision.Version)
 	_, err := c.JsonCall("DELETE", url, nil, nil)
 	return err
 }
@@ -682,18 +762,18 @@ type RemoteProcessGroup struct {
 }
 
 func (c *Client) CreateRemoteProcessGroup(processGroup *RemoteProcessGroup) error {
-	url := fmt.Sprintf("%s://%s/%s/process-groups/%s/remote-process-groups",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, processGroup.Component.ParentGroupId)
+	url := fmt.Sprintf("%s/process-groups/%s/remote-process-groups",
+		baseurl(c.Config), processGroup.Component.ParentGroupId)
 	_, err := c.JsonCall("POST", url, processGroup, processGroup)
 	return err
 }
 
 func (c *Client) GetRemoteProcessGroup(processGroupId string) (*RemoteProcessGroup, error) {
-	url := fmt.Sprintf("%s://%s/%s/remote-process-groups/%s",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, processGroupId)
+	url := fmt.Sprintf("%s/remote-process-groups/%s",
+		baseurl(c.Config), processGroupId)
 	processGroup := RemoteProcessGroup{}
 	code, err := c.JsonCall("GET", url, nil, &processGroup)
-	if 404 == code {
+	if code == 404 {
 		return nil, fmt.Errorf("not_found")
 	}
 	if nil != err {
@@ -703,15 +783,15 @@ func (c *Client) GetRemoteProcessGroup(processGroupId string) (*RemoteProcessGro
 }
 
 func (c *Client) UpdateRemoteProcessGroup(processGroup *RemoteProcessGroup) error {
-	url := fmt.Sprintf("%s://%s/%s/remote-process-groups/%s",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, processGroup.Component.Id)
+	url := fmt.Sprintf("%s/remote-process-groups/%s",
+		baseurl(c.Config), processGroup.Component.Id)
 	_, err := c.JsonCall("PUT", url, processGroup, processGroup)
 	return err
 }
 
 func (c *Client) DeleteRemoteProcessGroup(processGroup *RemoteProcessGroup) error {
-	url := fmt.Sprintf("%s://%s/%s/process-groups/%s?version=%d",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, processGroup.Component.Id, processGroup.Revision.Version)
+	url := fmt.Sprintf("%s/process-groups/%s?version=%d",
+		baseurl(c.Config), processGroup.Component.Id, processGroup.Revision.Version)
 	_, err := c.JsonCall("DELETE", url, nil, nil)
 	return err
 }
@@ -746,11 +826,11 @@ func (c *Client) CreatePort(port *Port) error {
 	url := ""
 	switch port_type {
 	case "INPUT_PORT":
-		url = fmt.Sprintf("%s://%s/%s/process-groups/%s/input-ports",
-			c.HttpScheme, c.Config.Host, c.Config.ApiPath, parent_group_id)
+		url = fmt.Sprintf("%s/process-groups/%s/input-ports",
+			baseurl(c.Config), parent_group_id)
 	case "OUTPUT_PORT":
-		url = fmt.Sprintf("%s://%s/%s/process-groups/%s/output-ports",
-			c.HttpScheme, c.Config.Host, c.Config.ApiPath, parent_group_id)
+		url = fmt.Sprintf("%s/process-groups/%s/output-ports",
+			baseurl(c.Config), parent_group_id)
 	default:
 		log.Fatal(fmt.Printf("Invalid port type : %s.", port_type))
 	}
@@ -763,11 +843,11 @@ func (c *Client) UpdatePort(port *Port) error {
 	url := ""
 	switch port_type {
 	case "INPUT_PORT":
-		url = fmt.Sprintf("%s://%s/%s/input-ports/%s",
-			c.HttpScheme, c.Config.Host, c.Config.ApiPath, portId)
+		url = fmt.Sprintf("%s/input-ports/%s",
+			baseurl(c.Config), portId)
 	case "OUTPUT_PORT":
-		url = fmt.Sprintf("%s://%s/%s/output-ports/%s",
-			c.HttpScheme, c.Config.Host, c.Config.ApiPath, portId)
+		url = fmt.Sprintf("%s/output-ports/%s",
+			baseurl(c.Config), portId)
 	default:
 		log.Fatal(fmt.Printf("Invalid port type : %s.", port_type))
 	}
@@ -781,17 +861,17 @@ func (c *Client) GetPort(portId string, port_type string) (*Port, error) {
 	url := ""
 	switch port_type {
 	case "INPUT_PORT":
-		url = fmt.Sprintf("%s://%s/%s/input-ports/%s",
-			c.HttpScheme, c.Config.Host, c.Config.ApiPath, portId)
+		url = fmt.Sprintf("%s/input-ports/%s",
+			baseurl(c.Config), portId)
 	case "OUTPUT_PORT":
-		url = fmt.Sprintf("%s://%s/%s/output-ports/%s",
-			c.HttpScheme, c.Config.Host, c.Config.ApiPath, portId)
+		url = fmt.Sprintf("%s/output-ports/%s",
+			baseurl(c.Config), portId)
 	default:
 		log.Fatal(fmt.Printf("Invalid port type : %s.", port_type))
 	}
 	port := Port{}
 	code, err := c.JsonCall("GET", url, nil, &port)
-	if 404 == code {
+	if code == 404 {
 		return nil, fmt.Errorf("not_found")
 	}
 	if nil != err {
@@ -806,11 +886,11 @@ func (c *Client) DeletePort(port *Port) error {
 	url := ""
 	switch port_type {
 	case "INPUT_PORT":
-		url = fmt.Sprintf("%s://%s/%s/input-ports/%s?version=%d",
-			c.HttpScheme, c.Config.Host, c.Config.ApiPath, port_id, port.Revision.Version)
+		url = fmt.Sprintf("%s/input-ports/%s?version=%d",
+			baseurl(c.Config), port_id, port.Revision.Version)
 	case "OUTPUT_PORT":
-		url = fmt.Sprintf("%s://%s/%s/output-ports/%s?version=%d",
-			c.HttpScheme, c.Config.Host, c.Config.ApiPath, port_id, port.Revision.Version)
+		url = fmt.Sprintf("%s/output-ports/%s?version=%d",
+			baseurl(c.Config), port_id, port.Revision.Version)
 	default:
 		log.Fatal(fmt.Printf("Invalid port type : %s.", port_type))
 	}
@@ -836,11 +916,11 @@ func (c *Client) SetPortState(port *Port, state string) error {
 	url := ""
 	switch port_type {
 	case "INPUT_PORT":
-		url = fmt.Sprintf("%s://%s/%s/input-ports/%s",
-			c.HttpScheme, c.Config.Host, c.Config.ApiPath, portId)
+		url = fmt.Sprintf("%s/input-ports/%s",
+			baseurl(c.Config), portId)
 	case "OUTPUT_PORT":
-		url = fmt.Sprintf("%s://%s/%s/output-ports/%s",
-			c.HttpScheme, c.Config.Host, c.Config.ApiPath, portId)
+		url = fmt.Sprintf("%s/output-ports/%s",
+			baseurl(c.Config), portId)
 	default:
 		log.Fatal(fmt.Printf("Invalid port type : %s.", port_type))
 	}
@@ -989,17 +1069,17 @@ func FunnelStub() *Funnel {
 	}
 }
 func (c *Client) CreateFunnel(funel *Funnel) error {
-	url := fmt.Sprintf("%s://%s/%s/process-groups/%s/funnels",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, funel.Component.ParentGroupId)
+	url := fmt.Sprintf("%s/process-groups/%s/funnels",
+		baseurl(c.Config), funel.Component.ParentGroupId)
 	_, err := c.JsonCall("POST", url, funel, funel)
 	return err
 }
 func (c *Client) GetFunnel(funnelId string) (*Funnel, error) {
-	url := fmt.Sprintf("%s://%s/%s/funnels/%s",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, funnelId)
+	url := fmt.Sprintf("%s/funnels/%s",
+		baseurl(c.Config), funnelId)
 	funnel := FunnelStub()
 	code, err := c.JsonCall("GET", url, nil, &funnel)
-	if 404 == code {
+	if code == 404 {
 		return nil, fmt.Errorf("not_found")
 	}
 	if nil != err {
@@ -1008,8 +1088,8 @@ func (c *Client) GetFunnel(funnelId string) (*Funnel, error) {
 	return funnel, nil
 }
 func (c *Client) UpdateFunnel(funnel *Funnel) error {
-	url := fmt.Sprintf("%s://%s/%s/funnels/%s",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, funnel.Component.Id)
+	url := fmt.Sprintf("%s/funnels/%s",
+		baseurl(c.Config), funnel.Component.Id)
 	_, err := c.JsonCall("PUT", url, funnel, funnel)
 	if nil != err {
 		return err
@@ -1017,8 +1097,8 @@ func (c *Client) UpdateFunnel(funnel *Funnel) error {
 	return nil
 }
 func (c *Client) DeleteFunnel(funnel *Funnel) error {
-	url := fmt.Sprintf("%s://%s/%s/funnels/%s?version=%d",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, funnel.Component.Id, funnel.Revision.Version)
+	url := fmt.Sprintf("%s/funnels/%s?version=%d",
+		baseurl(c.Config), funnel.Component.Id, funnel.Revision.Version)
 	_, err := c.JsonCall("DELETE", url, nil, nil)
 	return err
 }
@@ -1042,8 +1122,8 @@ type ReportingTask struct {
 }
 
 func (c *Client) CreateReportingTask(reportingTask *ReportingTask) error {
-	url := fmt.Sprintf("%s://%s/%s/controller/reporting-tasks",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath)
+	url := fmt.Sprintf("%s/controller/reporting-tasks",
+		baseurl(c.Config))
 	_, err := c.JsonCall("POST", url, reportingTask, reportingTask)
 	if nil != err {
 		return err
@@ -1053,11 +1133,11 @@ func (c *Client) CreateReportingTask(reportingTask *ReportingTask) error {
 }
 
 func (c *Client) GetReportingTask(reportingTaskId string) (*ReportingTask, error) {
-	url := fmt.Sprintf("%s://%s/%s/reporting-tasks/%s",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, reportingTaskId)
+	url := fmt.Sprintf("%s/reporting-tasks/%s",
+		baseurl(c.Config), reportingTaskId)
 	reportingTask := ReportingTask{}
 	code, err := c.JsonCall("GET", url, nil, &reportingTask)
-	if 404 == code {
+	if code == 404 {
 		return nil, fmt.Errorf("not_found")
 	}
 	if nil != err {
@@ -1069,8 +1149,8 @@ func (c *Client) GetReportingTask(reportingTaskId string) (*ReportingTask, error
 }
 
 func (c *Client) UpdateReportingTask(reportingTask *ReportingTask) error {
-	url := fmt.Sprintf("%s://%s/%s/reporting-tasks/%s",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, reportingTask.Component.Id)
+	url := fmt.Sprintf("%s/reporting-tasks/%s",
+		baseurl(c.Config), reportingTask.Component.Id)
 	_, err := c.JsonCall("PUT", url, reportingTask, reportingTask)
 	if nil != err {
 		return err
@@ -1079,8 +1159,8 @@ func (c *Client) UpdateReportingTask(reportingTask *ReportingTask) error {
 }
 
 func (c *Client) DeleteReportingTask(reportingTask *ReportingTask) error {
-	url := fmt.Sprintf("%s://%s/%s/reporting-tasks/%s?version=%d",
-		c.HttpScheme, c.Config.Host, c.Config.ApiPath, reportingTask.Component.Id, reportingTask.Revision.Version)
+	url := fmt.Sprintf("%s/reporting-tasks/%s?version=%d",
+		baseurl(c.Config), reportingTask.Component.Id, reportingTask.Revision.Version)
 	_, err := c.JsonCall("DELETE", url, nil, nil)
 	return err
 }

@@ -8,4 +8,6 @@ type Config struct {
 	AdminCertPath string
 	AdminKeyPath  string
 	HttpScheme    string
+	Username      string
+	Password      string
 }

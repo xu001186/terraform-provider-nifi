@@ -1,20 +1,20 @@
 package nifi
 
 import (
+	"context"
 	"fmt"
 	"log"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func ResourceProcessGroup() *schema.Resource {
 	return &schema.Resource{
-		Create: ResourceProcessGroupCreate,
-		Read:   ResourceProcessGroupRead,
-		Update: ResourceProcessGroupUpdate,
-		Delete: ResourceProcessGroupDelete,
-		Exists: ResourceProcessGroupExists,
-
+		CreateContext: ResourceProcessGroupCreate,
+		ReadContext:   ResourceProcessGroupRead,
+		UpdateContext: ResourceProcessGroupUpdate,
+		DeleteContext: ResourceProcessGroupDelete,
 		Schema: map[string]*schema.Schema{
 			"parent_group_id": SchemaParentGroupId(),
 			"revision":        SchemaRevision(),
@@ -39,46 +39,46 @@ func ResourceProcessGroup() *schema.Resource {
 	}
 }
 
-func ResourceProcessGroupCreate(d *schema.ResourceData, meta interface{}) error {
+func ResourceProcessGroupCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	processGroup := ProcessGroup{}
 	processGroup.Revision.Version = 0
 
 	err := ProcessGroupFromSchema(d, &processGroup)
 	if err != nil {
-		return fmt.Errorf("Failed to parse Process Group schema")
+		return diag.Errorf("Failed to parse Process Group schema")
 	}
 	parentGroupId := processGroup.Component.ParentGroupId
 
 	client := meta.(*Client)
 	err = client.CreateProcessGroup(&processGroup)
 	if err != nil {
-		return fmt.Errorf("Failed to create Process Group")
+		return diag.Errorf("Failed to create Process Group")
 	}
 
 	d.SetId(processGroup.Component.Id)
 	d.Set("parent_group_id", parentGroupId)
 
-	return ResourceProcessGroupRead(d, meta)
+	return ResourceProcessGroupRead(ctx, d, meta)
 }
 
-func ResourceProcessGroupRead(d *schema.ResourceData, meta interface{}) error {
+func ResourceProcessGroupRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	processGroupId := d.Id()
 
 	client := meta.(*Client)
 	processGroup, err := client.GetProcessGroup(processGroupId)
 	if err != nil {
-		return fmt.Errorf("Error retrieving Process Group: %s", processGroupId)
+		return diag.Errorf("error retrieving Process Group: %s", processGroupId)
 	}
 
 	err = ProcessGroupToSchema(d, processGroup)
 	if err != nil {
-		return fmt.Errorf("Failed to serialize Process Group: %s", processGroupId)
+		return diag.Errorf("Failed to serialize Process Group: %s", processGroupId)
 	}
 
 	return nil
 }
 
-func ResourceProcessGroupUpdate(d *schema.ResourceData, meta interface{}) error {
+func ResourceProcessGroupUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	processGroupId := d.Id()
 
 	client := meta.(*Client)
@@ -88,24 +88,24 @@ func ResourceProcessGroupUpdate(d *schema.ResourceData, meta interface{}) error 
 			d.SetId("")
 			return nil
 		} else {
-			return fmt.Errorf("Error retrieving Process Group: %s", processGroupId)
+			return diag.Errorf("error retrieving Process Group: %s", processGroupId)
 		}
 	}
 
 	err = ProcessGroupFromSchema(d, processGroup)
 	if err != nil {
-		return fmt.Errorf("Failed to parse Process Group schema: %s", processGroupId)
+		return diag.Errorf("Failed to parse Process Group schema: %s", processGroupId)
 	}
 
 	err = client.UpdateProcessGroup(processGroup)
 	if err != nil {
-		return fmt.Errorf("Failed to update Process Group: %s", processGroupId)
+		return diag.Errorf("Failed to update Process Group: %s", processGroupId)
 	}
 
-	return ResourceProcessGroupRead(d, meta)
+	return ResourceProcessGroupRead(ctx, d, meta)
 }
 
-func ResourceProcessGroupDelete(d *schema.ResourceData, meta interface{}) error {
+func ResourceProcessGroupDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	processGroupId := d.Id()
 	log.Printf("[INFO] Deleting Process Group: %s", processGroupId)
 
@@ -116,13 +116,13 @@ func ResourceProcessGroupDelete(d *schema.ResourceData, meta interface{}) error 
 			d.SetId("")
 			return nil
 		} else {
-			return fmt.Errorf("Error retrieving Process Group: %s", processGroupId)
+			return diag.Errorf("error retrieving Process Group: %s", processGroupId)
 		}
 	}
 
 	err = client.DeleteProcessGroup(processGroup)
 	if err != nil {
-		return fmt.Errorf("Error deleting Process Group: %s", processGroupId)
+		return diag.Errorf("error deleting Process Group: %s", processGroupId)
 	}
 
 	d.SetId("")
@@ -135,12 +135,12 @@ func ResourceProcessGroupExists(d *schema.ResourceData, meta interface{}) (bool,
 	client := meta.(*Client)
 	_, err := client.GetProcessGroup(processGroupId)
 	if nil != err {
-		if "not_found" == err.Error() {
+		if err.Error() == "not_found" {
 			log.Printf("[INFO] Process Group %s no longer exists, removing from state...", processGroupId)
 			d.SetId("")
 			return false, nil
 		} else {
-			return false, fmt.Errorf("Error testing existence of Process Group: %s", processGroupId)
+			return false, fmt.Errorf("error testing existence of Process Group: %s", processGroupId)
 		}
 	}
 
@@ -152,7 +152,7 @@ func ResourceProcessGroupExists(d *schema.ResourceData, meta interface{}) (bool,
 func ProcessGroupFromSchema(d *schema.ResourceData, processGroup *ProcessGroup) error {
 	v := d.Get("component").([]interface{})
 	if len(v) != 1 {
-		return fmt.Errorf("Exactly one component is required")
+		return fmt.Errorf("exactly one component is required")
 	}
 	component := v[0].(map[string]interface{})
 
@@ -162,7 +162,7 @@ func ProcessGroupFromSchema(d *schema.ResourceData, processGroup *ProcessGroup) 
 
 	v = component["position"].([]interface{})
 	if len(v) != 1 {
-		return fmt.Errorf("Exactly one component.position is required")
+		return fmt.Errorf("exactly one component.position is required")
 	}
 	position := v[0].(map[string]interface{})
 	processGroup.Component.Position.X = position["x"].(float64)

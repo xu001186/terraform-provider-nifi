@@ -362,9 +362,9 @@ func ProcessorFromSchema(d *schema.ResourceData, processor *Processor) error {
 	}
 	config := v[0].(map[string]interface{})
 
-	processor.Component.Config.SchedulingStrategy = config["scheduling_strategy"].(string)
+	processor.Component.Config.SchedulingStrategy = config["scheduling_strategy"].(SchedulingStrategy)
 	processor.Component.Config.SchedulingPeriod = config["scheduling_period"].(string)
-	processor.Component.Config.ExecutionNode = config["execution_node"].(string)
+	processor.Component.Config.ExecutionNode = config["execution_node"].(ExecutionNode)
 	processor.Component.Config.ConcurrentlySchedulableTaskCount = config["concurrently_schedulable_task_count"].(int)
 
 	processor.Component.Config.Properties = map[string]interface{}{}
