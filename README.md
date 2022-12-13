@@ -14,14 +14,13 @@ It aims to make flow deployment and maintenance completely automated process.
 
 ## Plugin Requirements
 
-- Terraform 0.9
+- Terraform v1.2.2+
 
 ## NiFi Version Compatibility
 
 Plugin Version | Supported NiFi API Version
 ---|---
-0.1-0.3 | 1.1, 1.2 (not confirmed)
-0.4+ | 1.3+
+1.3+ | 1.3+ 
 
 ## References
 
