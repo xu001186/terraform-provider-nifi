@@ -111,7 +111,7 @@ func ResourceConnectionCreate(d *schema.ResourceData, meta interface{}) error {
 	connection.Revision.Version = 0
 	err := ConnectionFromSchema(d, &connection)
 	if err != nil {
-		return fmt.Errorf("Failed to parse Connection schema")
+		return fmt.Errorf("failed to parse Connection schema")
 	}
 	parentGroupId := connection.Component.ParentGroupId
 
@@ -119,7 +119,7 @@ func ResourceConnectionCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*nifi.Client)
 	err = client.CreateConnection(&connection)
 	if err != nil {
-		return fmt.Errorf("Failed to create Connection %s", err)
+		return fmt.Errorf("failed to create Connection %s", err)
 	}
 	client.StartConnectionHand(&connection.Component.Source)
 	client.StartConnectionHand(&connection.Component.Destination)
@@ -136,12 +136,12 @@ func ResourceConnectionRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*nifi.Client)
 	connection, err := client.GetConnection(connectionId)
 	if err != nil {
-		return fmt.Errorf("Error retrieving Connection: %s", connectionId)
+		return fmt.Errorf("error retrieving Connection: %s", connectionId)
 	}
 
 	err = ConnectionToSchema(d, connection)
 	if err != nil {
-		return fmt.Errorf("Failed to serialize Connection: %s", connectionId)
+		return fmt.Errorf("failed to serialize Connection: %s", connectionId)
 	}
 
 	return nil
@@ -168,32 +168,32 @@ func ResourceConnectionUpdateInternal(d *schema.ResourceData, meta interface{}) 
 	client := meta.(*nifi.Client)
 	connection, err := client.GetConnection(connectionId)
 	if err != nil {
-		if "not_found" == err.Error() {
+		if err.Error() == "not_found" {
 			d.SetId("")
 			return nil
 		} else {
-			return fmt.Errorf("Error retrieving Connection: %s", connectionId)
+			return fmt.Errorf("error retrieving Connection: %s", connectionId)
 		}
 	}
 
 	// Stop related processors
 	err = client.StopConnectionHand(&connection.Component.Source)
 	if err != nil {
-		return fmt.Errorf("Failed to stop source Processor: %s", connection.Component.Source.Id)
+		return fmt.Errorf("failed to stop source Processor: %s", connection.Component.Source.Id)
 	}
 	err = client.StopConnectionHand(&connection.Component.Destination)
 	if err != nil {
-		return fmt.Errorf("Failed to stop destination Processor: %s", connection.Component.Destination.Id)
+		return fmt.Errorf("failed to stop destination Processor: %s", connection.Component.Destination.Id)
 	}
 
 	// Update connection
 	err = ConnectionFromSchema(d, connection)
 	if err != nil {
-		return fmt.Errorf("Failed to parse Connection schema: %s", connectionId)
+		return fmt.Errorf("failed to parse Connection schema: %s", connectionId)
 	}
 	err = client.UpdateConnection(connection)
 	if err != nil {
-		return fmt.Errorf("Failed to update Connection: %s", connectionId)
+		return fmt.Errorf("failed to update Connection: %s", connectionId)
 	}
 
 	// Start related processors
@@ -225,11 +225,11 @@ func ResourceConnectionDeleteInternal(d *schema.ResourceData, meta interface{}) 
 	client := meta.(*nifi.Client)
 	connection, err := client.GetConnection(connectionId)
 	if err != nil {
-		if "not_found" == err.Error() {
+		if err.Error() == "not_found" {
 			d.SetId("")
 			return nil
 		} else {
-			return fmt.Errorf("Error retrieving Connection: %s", connectionId)
+			return fmt.Errorf("error retrieving Connection: %s", connectionId)
 		}
 	}
 	source := &connection.Component.Source
@@ -237,30 +237,30 @@ func ResourceConnectionDeleteInternal(d *schema.ResourceData, meta interface{}) 
 	// Stop related processors if it is started
 	err = client.StopConnectionHand(source)
 	if err != nil {
-		return fmt.Errorf("Failed to stop source Processor: %s", connection.Component.Source.Id)
+		return fmt.Errorf("failed to stop source Processor: %s", connection.Component.Source.Id)
 	}
 
 	err = client.StopConnectionHand(destination)
 	if err != nil {
-		return fmt.Errorf("Failed to stop destination Processor: %s", connection.Component.Destination.Id)
+		return fmt.Errorf("failed to stop destination Processor: %s", connection.Component.Destination.Id)
 	}
 
 	// Purge connection data
 	log.Printf("[INFO] Dropping connection data: %d", connection.Revision.Version)
 	err = client.DropConnectionData(connection)
 	if nil != err {
-		return fmt.Errorf("Error purging Connection: %s", connectionId)
+		return fmt.Errorf("error purging Connection: %s", connectionId)
 	}
 
 	// Delete connection
 	// refresh conneciton so that the source/dest running status passing check
 	connection, err = client.GetConnection(connectionId)
 	if err != nil {
-		return fmt.Errorf("Error read Connection: %s", connectionId)
+		return fmt.Errorf("error read Connection: %s", connectionId)
 	}
 	err = client.DeleteConnection(connection)
 	if err != nil {
-		return fmt.Errorf("Error deleting Connection: %s", connectionId)
+		return fmt.Errorf("error deleting Connection: %s", connectionId)
 	}
 
 	// Start related processors
@@ -277,12 +277,12 @@ func ResourceConnectionExists(d *schema.ResourceData, meta interface{}) (bool, e
 	client := meta.(*nifi.Client)
 	_, err := client.GetConnection(connectionId)
 	if nil != err {
-		if "not_found" == err.Error() {
+		if err.Error() == "not_found" {
 			log.Printf("[INFO] Connection %s no longer exists, removing from state...", connectionId)
 			d.SetId("")
 			return false, nil
 		} else {
-			return false, fmt.Errorf("Error testing existence of Connection: %s", connectionId)
+			return false, fmt.Errorf("error testing existence of Connection: %s", connectionId)
 		}
 	}
 
@@ -294,7 +294,7 @@ func ResourceConnectionExists(d *schema.ResourceData, meta interface{}) (bool, e
 func ConnectionFromSchema(d *schema.ResourceData, connection *nifi.Connection) error {
 	v := d.Get("component").([]interface{})
 	if len(v) != 1 {
-		return fmt.Errorf("Exactly one component is required")
+		return fmt.Errorf("exactly one component is required")
 	}
 	component := v[0].(map[string]interface{})
 	connection.Component.ParentGroupId = component["parent_group_id"].(string)
@@ -304,19 +304,19 @@ func ConnectionFromSchema(d *schema.ResourceData, connection *nifi.Connection) e
 
 	v = component["source"].([]interface{})
 	if len(v) != 1 {
-		return fmt.Errorf("Exactly one component.source is required")
+		return fmt.Errorf("exactly one component.source is required")
 	}
 	source := v[0].(map[string]interface{})
-	connection.Component.Source.Type = source["type"].(string)
+	connection.Component.Source.Type = source["type"].(nifi.ConnectionHand_Type)
 	connection.Component.Source.Id = source["id"].(string)
 	connection.Component.Source.GroupId = source["group_id"].(string)
 
 	v = component["destination"].([]interface{})
 	if len(v) != 1 {
-		return fmt.Errorf("Exactly one component.destination is required")
+		return fmt.Errorf("exactly one component.destination is required")
 	}
 	destination := v[0].(map[string]interface{})
-	connection.Component.Destination.Type = destination["type"].(string)
+	connection.Component.Destination.Type = destination["type"].(nifi.ConnectionHand_Type)
 	connection.Component.Destination.Id = destination["id"].(string)
 	connection.Component.Destination.GroupId = destination["group_id"].(string)
 
