@@ -1,9 +1,10 @@
-package nifi
+package provider
 
 import (
 	"fmt"
 	"log"
 
+	nifi "github.com/glympse/terraform-provider-nifi/nifi"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -45,7 +46,7 @@ func ResourceUser() *schema.Resource {
 }
 
 func ResourceUserCreate(d *schema.ResourceData, meta interface{}) error {
-	user := UserStub()
+	user := nifi.UserStub()
 	user.Revision.Version = 0
 
 	err := UserFromSchema(d, user)
@@ -55,7 +56,7 @@ func ResourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 	parentGroupId := user.Component.ParentGroupId
 
 	// Create user
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	err = client.CreateUser(user)
 	if err != nil {
 		return fmt.Errorf("Failed to create User %v", err)
@@ -71,7 +72,7 @@ func ResourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 func ResourceUserRead(d *schema.ResourceData, meta interface{}) error {
 	userId := d.Id()
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	user, err := client.GetUser(userId)
 	if err != nil {
 		return fmt.Errorf("Error retrieving User: %s", userId)
@@ -91,7 +92,7 @@ func ResourceUserUpdate(d *schema.ResourceData, meta interface{}) error {
 }
 
 func ResourceUserDelete(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	client.Lock.Lock()
 	log.Printf("[INFO] Deleting User: %s...", d.Id())
 	err := ResourceUserDeleteInternal(d, meta)
@@ -104,7 +105,7 @@ func ResourceUserDeleteInternal(d *schema.ResourceData, meta interface{}) error 
 	userId := d.Id()
 
 	// Refresh user details
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	user, err := client.GetUser(userId)
 	if err != nil {
 		if "not_found" == err.Error() {
@@ -127,7 +128,7 @@ func ResourceUserDeleteInternal(d *schema.ResourceData, meta interface{}) error 
 
 func ResourceUserExists(d *schema.ResourceData, meta interface{}) (bool, error) {
 	userId := d.Id()
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	if userId != "" {
 		_, err := client.GetUser(userId)
 		if nil != err {
@@ -180,7 +181,7 @@ func ResourceUserExists(d *schema.ResourceData, meta interface{}) (bool, error) 
 
 // Schema Helpers
 
-func UserFromSchema(d *schema.ResourceData, user *User) error {
+func UserFromSchema(d *schema.ResourceData, user *nifi.User) error {
 	v := d.Get("component").([]interface{})
 	if len(v) != 1 {
 		return fmt.Errorf("Exactly one component is required")
@@ -200,7 +201,7 @@ func UserFromSchema(d *schema.ResourceData, user *User) error {
 	return nil
 }
 
-func UserToSchema(d *schema.ResourceData, user *User) error {
+func UserToSchema(d *schema.ResourceData, user *nifi.User) error {
 	log.Println("ResourceUserToSchema")
 	revision := []map[string]interface{}{{
 		"version": user.Revision.Version,

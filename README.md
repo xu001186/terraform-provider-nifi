@@ -20,7 +20,7 @@ It aims to make flow deployment and maintenance completely automated process.
 
 Plugin Version | Supported NiFi API Version
 ---|---
-1.3+ | 1.3+ 
+1.13+ | 1.3+ 
 
 ## References
 

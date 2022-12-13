@@ -1,10 +1,11 @@
-package nifi
+package provider
 
 import (
 	"context"
 	"fmt"
 	"log"
 
+	nifi "github.com/glympse/terraform-provider-nifi/nifi"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -40,7 +41,7 @@ func ResourceProcessGroup() *schema.Resource {
 }
 
 func ResourceProcessGroupCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	processGroup := ProcessGroup{}
+	processGroup := nifi.ProcessGroup{}
 	processGroup.Revision.Version = 0
 
 	err := ProcessGroupFromSchema(d, &processGroup)
@@ -49,7 +50,7 @@ func ResourceProcessGroupCreate(ctx context.Context, d *schema.ResourceData, met
 	}
 	parentGroupId := processGroup.Component.ParentGroupId
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	err = client.CreateProcessGroup(&processGroup)
 	if err != nil {
 		return diag.Errorf("Failed to create Process Group")
@@ -64,7 +65,7 @@ func ResourceProcessGroupCreate(ctx context.Context, d *schema.ResourceData, met
 func ResourceProcessGroupRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	processGroupId := d.Id()
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	processGroup, err := client.GetProcessGroup(processGroupId)
 	if err != nil {
 		return diag.Errorf("error retrieving Process Group: %s", processGroupId)
@@ -81,7 +82,7 @@ func ResourceProcessGroupRead(ctx context.Context, d *schema.ResourceData, meta 
 func ResourceProcessGroupUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	processGroupId := d.Id()
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	processGroup, err := client.GetProcessGroup(processGroupId)
 	if err != nil {
 		if "not_found" == err.Error() {
@@ -109,7 +110,7 @@ func ResourceProcessGroupDelete(ctx context.Context, d *schema.ResourceData, met
 	processGroupId := d.Id()
 	log.Printf("[INFO] Deleting Process Group: %s", processGroupId)
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	processGroup, err := client.GetProcessGroup(processGroupId)
 	if nil != err {
 		if "not_found" == err.Error() {
@@ -132,7 +133,7 @@ func ResourceProcessGroupDelete(ctx context.Context, d *schema.ResourceData, met
 func ResourceProcessGroupExists(d *schema.ResourceData, meta interface{}) (bool, error) {
 	processGroupId := d.Id()
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	_, err := client.GetProcessGroup(processGroupId)
 	if nil != err {
 		if err.Error() == "not_found" {
@@ -149,7 +150,7 @@ func ResourceProcessGroupExists(d *schema.ResourceData, meta interface{}) (bool,
 
 // Schema Helpers
 
-func ProcessGroupFromSchema(d *schema.ResourceData, processGroup *ProcessGroup) error {
+func ProcessGroupFromSchema(d *schema.ResourceData, processGroup *nifi.ProcessGroup) error {
 	v := d.Get("component").([]interface{})
 	if len(v) != 1 {
 		return fmt.Errorf("exactly one component is required")
@@ -171,7 +172,7 @@ func ProcessGroupFromSchema(d *schema.ResourceData, processGroup *ProcessGroup) 
 	return nil
 }
 
-func ProcessGroupToSchema(d *schema.ResourceData, processGroup *ProcessGroup) error {
+func ProcessGroupToSchema(d *schema.ResourceData, processGroup *nifi.ProcessGroup) error {
 	revision := []map[string]interface{}{{
 		"version": processGroup.Revision.Version,
 	}}

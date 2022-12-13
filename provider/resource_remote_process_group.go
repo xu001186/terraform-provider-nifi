@@ -1,9 +1,10 @@
-package nifi
+package provider
 
 import (
 	"fmt"
 	"log"
 
+	nifi "github.com/glympse/terraform-provider-nifi/nifi"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -49,7 +50,7 @@ func ResourceRemoteProcessGroup() *schema.Resource {
 }
 
 func ResourceRemoteProcessGroupCreate(d *schema.ResourceData, meta interface{}) error {
-	processGroup := RemoteProcessGroup{}
+	processGroup := nifi.RemoteProcessGroup{}
 	processGroup.Revision.Version = 0
 
 	err := RemoteProcessGroupFromSchema(d, &processGroup)
@@ -58,7 +59,7 @@ func ResourceRemoteProcessGroupCreate(d *schema.ResourceData, meta interface{}) 
 	}
 	parentGroupId := processGroup.Component.ParentGroupId
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	err = client.CreateRemoteProcessGroup(&processGroup)
 	if err != nil {
 		return fmt.Errorf("Failed to create Remote Process Group")
@@ -73,7 +74,7 @@ func ResourceRemoteProcessGroupCreate(d *schema.ResourceData, meta interface{}) 
 func ResourceRemoteProcessGroupRead(d *schema.ResourceData, meta interface{}) error {
 	processGroupId := d.Id()
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	processGroup, err := client.GetRemoteProcessGroup(processGroupId)
 	if err != nil {
 		return fmt.Errorf("Error retrieving Remote Process Group: %s", processGroupId)
@@ -90,7 +91,7 @@ func ResourceRemoteProcessGroupRead(d *schema.ResourceData, meta interface{}) er
 func ResourceRemoteProcessGroupUpdate(d *schema.ResourceData, meta interface{}) error {
 	processGroupId := d.Id()
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	processGroup, err := client.GetRemoteProcessGroup(processGroupId)
 	if err != nil {
 		if "not_found" == err.Error() {
@@ -118,7 +119,7 @@ func ResourceRemoteProcessGroupDelete(d *schema.ResourceData, meta interface{}) 
 	processGroupId := d.Id()
 	log.Printf("[INFO] Deleting Remote Process Group: %s", processGroupId)
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	processGroup, err := client.GetRemoteProcessGroup(processGroupId)
 	if nil != err {
 		if "not_found" == err.Error() {
@@ -141,7 +142,7 @@ func ResourceRemoteProcessGroupDelete(d *schema.ResourceData, meta interface{}) 
 func ResourceRemoteProcessGroupExists(d *schema.ResourceData, meta interface{}) (bool, error) {
 	processGroupId := d.Id()
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	_, err := client.GetRemoteProcessGroup(processGroupId)
 	if nil != err {
 		if "not_found" == err.Error() {
@@ -158,7 +159,7 @@ func ResourceRemoteProcessGroupExists(d *schema.ResourceData, meta interface{}) 
 
 // Schema Helpers
 
-func RemoteProcessGroupFromSchema(d *schema.ResourceData, processGroup *RemoteProcessGroup) error {
+func RemoteProcessGroupFromSchema(d *schema.ResourceData, processGroup *nifi.RemoteProcessGroup) error {
 	v := d.Get("component").([]interface{})
 	if len(v) != 1 {
 		return fmt.Errorf("Exactly one component is required")
@@ -183,7 +184,7 @@ func RemoteProcessGroupFromSchema(d *schema.ResourceData, processGroup *RemotePr
 	return nil
 }
 
-func RemoteProcessGroupToSchema(d *schema.ResourceData, processGroup *RemoteProcessGroup) error {
+func RemoteProcessGroupToSchema(d *schema.ResourceData, processGroup *nifi.RemoteProcessGroup) error {
 	revision := []map[string]interface{}{{
 		"version": processGroup.Revision.Version,
 	}}

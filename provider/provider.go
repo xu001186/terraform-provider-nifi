@@ -1,8 +1,9 @@
-package nifi
+package provider
 
 import (
 	"context"
 
+	nifi "github.com/glympse/terraform-provider-nifi/nifi"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -69,14 +70,14 @@ func Provider() *schema.Provider {
 }
 
 func providerConfigure(d *schema.ResourceData, terraformVersion string) (interface{}, diag.Diagnostics) {
-	config := Config{
+	config := nifi.Config{
 		Host:          d.Get("host").(string),
 		HttpScheme:    d.Get("http_scheme").(string),
 		ApiPath:       d.Get("api_path").(string),
 		AdminCertPath: d.Get("admin_cert").(string),
 		AdminKeyPath:  d.Get("admin_key").(string),
 	}
-	client, err := NewClient(config)
+	client, err := nifi.NewClient(config)
 	if err != nil {
 		return nil, diag.FromErr(err)
 	}

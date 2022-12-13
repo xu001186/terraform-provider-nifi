@@ -1,9 +1,10 @@
-package nifi
+package provider
 
 import (
 	"fmt"
 	"log"
 
+	nifi "github.com/glympse/terraform-provider-nifi/nifi"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -81,7 +82,7 @@ func ResourceProcessor() *schema.Resource {
 }
 
 func ResourceProcessorCreate(d *schema.ResourceData, meta interface{}) error {
-	processor := ProcessorStub()
+	processor := nifi.ProcessorStub()
 	processor.Revision.Version = 0
 
 	err := ProcessorFromSchema(d, processor)
@@ -91,7 +92,7 @@ func ResourceProcessorCreate(d *schema.ResourceData, meta interface{}) error {
 	parentGroupId := processor.Component.ParentGroupId
 
 	// Create processor
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	err = client.CreateProcessor(processor)
 	if err != nil {
 		return fmt.Errorf("Failed to create Processor")
@@ -113,7 +114,7 @@ func ResourceProcessorCreate(d *schema.ResourceData, meta interface{}) error {
 func ResourceProcessorRead(d *schema.ResourceData, meta interface{}) error {
 	processorId := d.Id()
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	processor, err := client.GetProcessor(processorId)
 	if err != nil {
 		return fmt.Errorf("Error retrieving Processor: %s", processorId)
@@ -128,7 +129,7 @@ func ResourceProcessorRead(d *schema.ResourceData, meta interface{}) error {
 }
 
 func ResourceProcessorUpdate(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	client.Lock.Lock()
 	log.Printf("[INFO] Updating Processor: %s...", d.Id())
 	err := ResourceProcessorUpdateInternal(d, meta)
@@ -141,7 +142,7 @@ func ResourceProcessorUpdateInternal(d *schema.ResourceData, meta interface{}) e
 	processorId := d.Id()
 
 	// Refresh processor details
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	processor, err := client.GetProcessor(processorId)
 	if err != nil {
 		if "not_found" == err.Error() {
@@ -189,7 +190,7 @@ func ResourceProcessorUpdateInternal(d *schema.ResourceData, meta interface{}) e
 }
 
 func ResourceProcessorDelete(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	client.Lock.Lock()
 	log.Printf("[INFO] Deleting Processor: %s...", d.Id())
 	err := ResourceProcessorDeleteInternal(d, meta)
@@ -202,7 +203,7 @@ func ResourceProcessorDeleteInternal(d *schema.ResourceData, meta interface{}) e
 	processorId := d.Id()
 
 	// Refresh processor details
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	processor, err := client.GetProcessor(processorId)
 	if err != nil {
 		if "not_found" == err.Error() {
@@ -234,7 +235,7 @@ func ResourceProcessorDeleteInternal(d *schema.ResourceData, meta interface{}) e
 func ResourceProcessorExists(d *schema.ResourceData, meta interface{}) (bool, error) {
 	processorId := d.Id()
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	_, err := client.GetProcessor(processorId)
 	if nil != err {
 		if "not_found" == err.Error() {
@@ -251,7 +252,7 @@ func ResourceProcessorExists(d *schema.ResourceData, meta interface{}) (bool, er
 
 // Connection Helpers
 
-func ProcessorRemoveOverlappingConnections(client *Client, processor *Processor) error {
+func ProcessorRemoveOverlappingConnections(client *nifi.Client, processor *nifi.Processor) error {
 	// Build a set of processor's auto-terminated relationships
 	terminatedRelationships := map[string]bool{}
 	for _, v := range processor.Component.Config.AutoTerminatedRelationships {
@@ -269,7 +270,7 @@ func ProcessorRemoveOverlappingConnections(client *Client, processor *Processor)
 	}
 
 	// Find a subset of these connections that overlap with the processor's auto-terminated relationships.
-	overlappingConnections := []Connection{}
+	overlappingConnections := []nifi.Connection{}
 	for _, connection := range groupConnections.Connections {
 		if connection.Component.Source.Id != processor.Component.Id {
 			continue
@@ -338,7 +339,7 @@ func ProcessorRemoveOverlappingConnections(client *Client, processor *Processor)
 
 // Schema Helpers
 
-func ProcessorFromSchema(d *schema.ResourceData, processor *Processor) error {
+func ProcessorFromSchema(d *schema.ResourceData, processor *nifi.Processor) error {
 	v := d.Get("component").([]interface{})
 	if len(v) != 1 {
 		return fmt.Errorf("Exactly one component is required")
@@ -362,9 +363,9 @@ func ProcessorFromSchema(d *schema.ResourceData, processor *Processor) error {
 	}
 	config := v[0].(map[string]interface{})
 
-	processor.Component.Config.SchedulingStrategy = config["scheduling_strategy"].(SchedulingStrategy)
+	processor.Component.Config.SchedulingStrategy = config["scheduling_strategy"].(nifi.SchedulingStrategy)
 	processor.Component.Config.SchedulingPeriod = config["scheduling_period"].(string)
-	processor.Component.Config.ExecutionNode = config["execution_node"].(ExecutionNode)
+	processor.Component.Config.ExecutionNode = config["execution_node"].(nifi.ExecutionNode)
 	processor.Component.Config.ConcurrentlySchedulableTaskCount = config["concurrently_schedulable_task_count"].(int)
 
 	processor.Component.Config.Properties = map[string]interface{}{}
@@ -383,7 +384,7 @@ func ProcessorFromSchema(d *schema.ResourceData, processor *Processor) error {
 	return nil
 }
 
-func ProcessorToSchema(d *schema.ResourceData, processor *Processor) error {
+func ProcessorToSchema(d *schema.ResourceData, processor *nifi.Processor) error {
 	revision := []map[string]interface{}{{
 		"version": processor.Revision.Version,
 	}}

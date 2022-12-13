@@ -1,9 +1,10 @@
-package nifi
+package provider
 
 import (
 	"fmt"
 	"log"
 
+	nifi "github.com/glympse/terraform-provider-nifi/nifi"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -61,7 +62,7 @@ func ResourceReportingTask() *schema.Resource {
 }
 
 func ResourceReportingTaskCreate(d *schema.ResourceData, meta interface{}) error {
-	reportingTask := ReportingTask{}
+	reportingTask := nifi.ReportingTask{}
 	reportingTask.Revision.Version = 0
 
 	err := ReportingTaskFromSchema(d, &reportingTask)
@@ -70,7 +71,7 @@ func ResourceReportingTaskCreate(d *schema.ResourceData, meta interface{}) error
 	}
 	parentGroupId := reportingTask.Component.ParentGroupId
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	err = client.CreateReportingTask(&reportingTask)
 	if err != nil {
 		return fmt.Errorf("Failed to create Reporting Task")
@@ -85,7 +86,7 @@ func ResourceReportingTaskCreate(d *schema.ResourceData, meta interface{}) error
 func ResourceReportingTaskRead(d *schema.ResourceData, meta interface{}) error {
 	reportingTaskId := d.Id()
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	reportingTask, err := client.GetReportingTask(reportingTaskId)
 	if err != nil {
 		return fmt.Errorf("Error retrieving Reporting Task: %s", reportingTaskId)
@@ -102,7 +103,7 @@ func ResourceReportingTaskRead(d *schema.ResourceData, meta interface{}) error {
 func ResourceReportingTaskUpdate(d *schema.ResourceData, meta interface{}) error {
 	reportingTaskId := d.Id()
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	reportingTask, err := client.GetReportingTask(reportingTaskId)
 	if err != nil {
 		if "not_found" == err.Error() {
@@ -130,7 +131,7 @@ func ResourceReportingTaskDelete(d *schema.ResourceData, meta interface{}) error
 	reportingTaskId := d.Id()
 	log.Printf("[INFO] Deleting Reporting Task: %s", reportingTaskId)
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	reportingTask, err := client.GetReportingTask(reportingTaskId)
 	if nil != err {
 		if "not_found" == err.Error() {
@@ -153,7 +154,7 @@ func ResourceReportingTaskDelete(d *schema.ResourceData, meta interface{}) error
 func ResourceReportingTaskExists(d *schema.ResourceData, meta interface{}) (bool, error) {
 	reportingTaskId := d.Id()
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	_, err := client.GetReportingTask(reportingTaskId)
 	if nil != err {
 		if "not_found" == err.Error() {
@@ -170,7 +171,7 @@ func ResourceReportingTaskExists(d *schema.ResourceData, meta interface{}) (bool
 
 // Schema Helpers
 
-func ReportingTaskFromSchema(d *schema.ResourceData, reportingTask *ReportingTask) error {
+func ReportingTaskFromSchema(d *schema.ResourceData, reportingTask *nifi.ReportingTask) error {
 	v := d.Get("component").([]interface{})
 	if len(v) != 1 {
 		return fmt.Errorf("Exactly one component is required")
@@ -194,7 +195,7 @@ func ReportingTaskFromSchema(d *schema.ResourceData, reportingTask *ReportingTas
 	return nil
 }
 
-func ReportingTaskToSchema(d *schema.ResourceData, reportingTask *ReportingTask) error {
+func ReportingTaskToSchema(d *schema.ResourceData, reportingTask *nifi.ReportingTask) error {
 	revision := []map[string]interface{}{{
 		"version": reportingTask.Revision.Version,
 	}}

@@ -1,9 +1,10 @@
-package nifi
+package provider
 
 import (
 	"fmt"
 	"log"
 
+	nifi "github.com/glympse/terraform-provider-nifi/nifi"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -48,7 +49,7 @@ func ResourcePort() *schema.Resource {
 }
 
 func ResourcePortCreate(d *schema.ResourceData, meta interface{}) error {
-	port := &Port{}
+	port := &nifi.Port{}
 	port.Revision.Version = 0
 
 	err := PortFromSchema(d, port)
@@ -58,7 +59,7 @@ func ResourcePortCreate(d *schema.ResourceData, meta interface{}) error {
 	parentGroupId := port.Component.ParentGroupId
 
 	// Create processor
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	err = client.CreatePort(port)
 	if err != nil {
 		return fmt.Errorf("Failed to create Port")
@@ -88,7 +89,7 @@ func ResourcePortRead(d *schema.ResourceData, meta interface{}) error {
 	component := v[0].(map[string]interface{})
 	port_type := component["type"].(string)
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	port, err := client.GetPort(portId, port_type)
 	if err != nil {
 		return fmt.Errorf("Error retrieving Port: %s", portId)
@@ -103,7 +104,7 @@ func ResourcePortRead(d *schema.ResourceData, meta interface{}) error {
 }
 
 func ResourcePortUpdate(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	client.Lock.Lock()
 	log.Printf("[INFO] Updating Port: %s...", d.Id())
 	err := ResourcePortUpdateInternal(d, meta)
@@ -128,7 +129,7 @@ func ResourcePortUpdateInternal(d *schema.ResourceData, meta interface{}) error 
 	component := v[0].(map[string]interface{})
 	port_type := component["type"].(string)
 	// Refresh processor details
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	port, err := client.GetPort(portId, port_type)
 	if err != nil {
 		if "not_found" == err.Error() {
@@ -171,7 +172,7 @@ func ResourcePortUpdateInternal(d *schema.ResourceData, meta interface{}) error 
 }
 
 func ResourcePortDelete(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	client.Lock.Lock()
 	log.Printf("[INFO] Deleting Port: %s...", d.Id())
 	err := ResourcePortDeleteInternal(d, meta)
@@ -194,7 +195,7 @@ func ResourcePortDeleteInternal(d *schema.ResourceData, meta interface{}) error 
 	port_type := component["type"].(string)
 	log.Printf("Deleteing port ********************************%s, %s", port_type, portId)
 	// Refresh processor details
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	port, err := client.GetPort(portId, port_type)
 	if err != nil {
 		if "not_found" == err.Error() {
@@ -239,7 +240,7 @@ func ResourcePortExists(d *schema.ResourceData, meta interface{}) (bool, error) 
 	component := v[0].(map[string]interface{})
 	port_type := component["type"].(string)
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	_, err := client.GetPort(portId, port_type)
 	if nil != err {
 		if "not_found" == err.Error() {
@@ -258,7 +259,7 @@ func ResourcePortExists(d *schema.ResourceData, meta interface{}) (bool, error) 
 
 // Schema Helpers
 
-func PortFromSchema(d *schema.ResourceData, port *Port) error {
+func PortFromSchema(d *schema.ResourceData, port *nifi.Port) error {
 	v := d.Get("component").([]interface{})
 	if len(v) != 1 {
 		return fmt.Errorf("Exactly one component is required")
@@ -278,7 +279,7 @@ func PortFromSchema(d *schema.ResourceData, port *Port) error {
 	return nil
 }
 
-func PortToSchema(d *schema.ResourceData, port *Port) error {
+func PortToSchema(d *schema.ResourceData, port *nifi.Port) error {
 	revision := []map[string]interface{}{{
 		"version": port.Revision.Version,
 	}}

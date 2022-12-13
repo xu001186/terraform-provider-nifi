@@ -13,3 +13,9 @@ bin
 **/crash.log
 
 **/terraform-provider-nifi
+examples/new_flow/.terraform.lock.hcl
+.vscode/launch.json
+examples/new_flow/example.tfvars
+examples/new_flow/main.tf
+examples/new_flow/.terraform/plugin_path
+examples/new_flow/.terraform/providers/github.com/glympse/nifi/1.0.0/darwin_amd64

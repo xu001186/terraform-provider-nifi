@@ -1,9 +1,10 @@
-package nifi
+package provider
 
 import (
 	"fmt"
 	"log"
 
+	nifi "github.com/glympse/terraform-provider-nifi/nifi"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -106,7 +107,7 @@ func ResourceConnection() *schema.Resource {
 }
 
 func ResourceConnectionCreate(d *schema.ResourceData, meta interface{}) error {
-	connection := Connection{}
+	connection := nifi.Connection{}
 	connection.Revision.Version = 0
 	err := ConnectionFromSchema(d, &connection)
 	if err != nil {
@@ -115,7 +116,7 @@ func ResourceConnectionCreate(d *schema.ResourceData, meta interface{}) error {
 	parentGroupId := connection.Component.ParentGroupId
 
 	// Create connection
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	err = client.CreateConnection(&connection)
 	if err != nil {
 		return fmt.Errorf("Failed to create Connection %s", err)
@@ -132,7 +133,7 @@ func ResourceConnectionCreate(d *schema.ResourceData, meta interface{}) error {
 func ResourceConnectionRead(d *schema.ResourceData, meta interface{}) error {
 	connectionId := d.Id()
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	connection, err := client.GetConnection(connectionId)
 	if err != nil {
 		return fmt.Errorf("Error retrieving Connection: %s", connectionId)
@@ -147,7 +148,7 @@ func ResourceConnectionRead(d *schema.ResourceData, meta interface{}) error {
 }
 
 func ResourceConnectionUpdate(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	client.Lock.Lock()
 	log.Printf("[INFO] Updating Connection: %s...", d.Id())
 	err := ResourceConnectionUpdateInternal(d, meta)
@@ -164,7 +165,7 @@ func ResourceConnectionUpdateInternal(d *schema.ResourceData, meta interface{}) 
 	connectionId := d.Id()
 
 	// Refresh connection details
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	connection, err := client.GetConnection(connectionId)
 	if err != nil {
 		if "not_found" == err.Error() {
@@ -204,7 +205,7 @@ func ResourceConnectionUpdateInternal(d *schema.ResourceData, meta interface{}) 
 }
 
 func ResourceConnectionDelete(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	client.Lock.Lock()
 	log.Printf("[INFO] Deleting Connection: %s...", d.Id())
 	err := ResourceConnectionDeleteInternal(d, meta)
@@ -221,7 +222,7 @@ func ResourceConnectionDeleteInternal(d *schema.ResourceData, meta interface{}) 
 	connectionId := d.Id()
 
 	// Refresh connection details
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	connection, err := client.GetConnection(connectionId)
 	if err != nil {
 		if "not_found" == err.Error() {
@@ -273,7 +274,7 @@ func ResourceConnectionDeleteInternal(d *schema.ResourceData, meta interface{}) 
 func ResourceConnectionExists(d *schema.ResourceData, meta interface{}) (bool, error) {
 	connectionId := d.Id()
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	_, err := client.GetConnection(connectionId)
 	if nil != err {
 		if "not_found" == err.Error() {
@@ -290,7 +291,7 @@ func ResourceConnectionExists(d *schema.ResourceData, meta interface{}) (bool, e
 
 // Schema Helpers
 
-func ConnectionFromSchema(d *schema.ResourceData, connection *Connection) error {
+func ConnectionFromSchema(d *schema.ResourceData, connection *nifi.Connection) error {
 	v := d.Get("component").([]interface{})
 	if len(v) != 1 {
 		return fmt.Errorf("Exactly one component is required")
@@ -328,10 +329,10 @@ func ConnectionFromSchema(d *schema.ResourceData, connection *Connection) error 
 
 	v = component["bends"].([]interface{})
 	if len(v) > 0 {
-		bends := []Position{}
+		bends := []nifi.Position{}
 		for _, vv := range v {
 			bend := vv.(map[string]interface{})
-			bends = append(bends, Position{
+			bends = append(bends, nifi.Position{
 				X: bend["x"].(float64),
 				Y: bend["y"].(float64),
 			})
@@ -342,7 +343,7 @@ func ConnectionFromSchema(d *schema.ResourceData, connection *Connection) error 
 	return nil
 }
 
-func ConnectionToSchema(d *schema.ResourceData, connection *Connection) error {
+func ConnectionToSchema(d *schema.ResourceData, connection *nifi.Connection) error {
 	revision := []map[string]interface{}{{
 		"version": connection.Revision.Version,
 	}}

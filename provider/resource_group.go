@@ -1,9 +1,10 @@
-package nifi
+package provider
 
 import (
 	"fmt"
 	"log"
 
+	nifi "github.com/glympse/terraform-provider-nifi/nifi"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -51,7 +52,7 @@ func ResourceGroup() *schema.Resource {
 }
 
 func ResourceGroupCreate(d *schema.ResourceData, meta interface{}) error {
-	group := GroupStub()
+	group := nifi.GroupStub()
 	group.Revision.Version = 0
 
 	err := GroupFromSchema(meta, d, group)
@@ -61,7 +62,7 @@ func ResourceGroupCreate(d *schema.ResourceData, meta interface{}) error {
 	parentGroupId := group.Component.ParentGroupId
 
 	// Create user
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	err = client.CreateGroup(group)
 	if err != nil {
 		return fmt.Errorf("Failed to create Connection")
@@ -77,7 +78,7 @@ func ResourceGroupCreate(d *schema.ResourceData, meta interface{}) error {
 func ResourceGroupRead(d *schema.ResourceData, meta interface{}) error {
 	groupId := d.Id()
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	group, err := client.GetGroup(groupId)
 	if err != nil {
 		return fmt.Errorf("Error retrieving Group: %s", groupId)
@@ -92,7 +93,7 @@ func ResourceGroupRead(d *schema.ResourceData, meta interface{}) error {
 }
 
 func ResourceGroupUpdate(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	log.Printf("[INFO] Updating Group: %s..., not implemented", d.Id())
 	client.Lock.Lock()
 	err := ResourceGroupUpdateInternal(d, meta)
@@ -108,7 +109,7 @@ func ResourceGroupUpdateInternal(d *schema.ResourceData, meta interface{}) error
 	groupId := d.Id()
 
 	// Refresh group details
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	group, err := client.GetGroup(groupId)
 	if "not_found" == err.Error() {
 		d.SetId("")
@@ -134,7 +135,7 @@ func ResourceGroupUpdateInternal(d *schema.ResourceData, meta interface{}) error
 }
 
 func ResourceGroupDelete(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	log.Printf("[INFO] Deleting Group: %s...", d.Id())
 	client.Lock.Lock()
 	err := ResourceGroupDeleteInternal(d, meta)
@@ -147,7 +148,7 @@ func ResourceGroupDeleteInternal(d *schema.ResourceData, meta interface{}) error
 	groupId := d.Id()
 
 	// Refresh group details
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	group, err := client.GetGroup(groupId)
 	if "not_found" == err.Error() {
 		d.SetId("")
@@ -169,7 +170,7 @@ func ResourceGroupDeleteInternal(d *schema.ResourceData, meta interface{}) error
 
 func ResourceGroupExists(d *schema.ResourceData, meta interface{}) (bool, error) {
 	groupId := d.Id()
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	if groupId != "" {
 		_, err := client.GetGroup(groupId)
 		if "not_found" == err.Error() {
@@ -219,7 +220,7 @@ func ResourceGroupExists(d *schema.ResourceData, meta interface{}) (bool, error)
 
 // Schema Helpers
 
-func GroupFromSchema(meta interface{}, d *schema.ResourceData, group *Group) error {
+func GroupFromSchema(meta interface{}, d *schema.ResourceData, group *nifi.Group) error {
 	v := d.Get("component").([]interface{})
 	if len(v) != 1 {
 		return fmt.Errorf("Exactly one component is required")
@@ -237,16 +238,16 @@ func GroupFromSchema(meta interface{}, d *schema.ResourceData, group *Group) err
 	group.Component.Position.Y = position["y"].(float64)
 
 	userList := component["users"].(*schema.Set).List()
-	tenants := []Tenant{}
+	tenants := []nifi.Tenant{}
 	for _, u := range userList {
-		t := Tenant{Id: u.(string)}
+		t := nifi.Tenant{Id: u.(string)}
 		tenants = append(tenants, t)
 	}
 	group.Component.Users = tenants
 	return nil
 }
 
-func GroupToSchema(d *schema.ResourceData, group *Group) error {
+func GroupToSchema(d *schema.ResourceData, group *nifi.Group) error {
 	revision := []map[string]interface{}{{
 		"version": group.Revision.Version,
 	}}

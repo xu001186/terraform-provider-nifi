@@ -72,8 +72,8 @@ func TestClientProcessorCreate(t *testing.T) {
 				Y: 0,
 			},
 			Config: &ProcessorConfig{
-				ExecutionNode:                    ALL,
-				SchedulingStrategy:               "TIMER_DRIVEN",
+				ExecutionNode:                    ExecutionNode_ALL,
+				SchedulingStrategy:               SchedulingStrategy_TIMER_DRIVEN,
 				SchedulingPeriod:                 "0 sec",
 				ConcurrentlySchedulableTaskCount: 1,
 				Properties: map[string]interface{}{
@@ -139,10 +139,10 @@ func TestClientConnectionCreate(t *testing.T) {
 			},
 
 			Config: &ProcessorConfig{
-				SchedulingStrategy:               "TIMER_DRIVEN",
+				SchedulingStrategy:               SchedulingStrategy_TIMER_DRIVEN,
+				ExecutionNode:                    ExecutionNode_ALL,
 				SchedulingPeriod:                 "0 sec",
 				ConcurrentlySchedulableTaskCount: 1,
-				ExecutionNode:                    ALL,
 				Properties: map[string]interface{}{
 					"File Size":        "0B",
 					"Batch Size":       "1",
@@ -170,7 +170,8 @@ func TestClientConnectionCreate(t *testing.T) {
 				Y: 0,
 			},
 			Config: &ProcessorConfig{
-				SchedulingStrategy:               "TIMER_DRIVEN",
+				SchedulingStrategy:               SchedulingStrategy_TIMER_DRIVEN,
+				ExecutionNode:                    ExecutionNode_ALL,
 				SchedulingPeriod:                 "0 sec",
 				ConcurrentlySchedulableTaskCount: 1,
 				Properties:                       map[string]interface{}{},

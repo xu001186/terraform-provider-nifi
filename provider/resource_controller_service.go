@@ -1,9 +1,10 @@
-package nifi
+package provider
 
 import (
 	"fmt"
 	"log"
 
+	nifi "github.com/glympse/terraform-provider-nifi/nifi"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -47,7 +48,7 @@ func ResourceControllerService() *schema.Resource {
 }
 
 func ResourceControllerServiceCreate(d *schema.ResourceData, meta interface{}) error {
-	controllerService := ControllerService{}
+	controllerService := nifi.ControllerService{}
 	controllerService.Revision.Version = 0
 
 	err := ControllerServiceFromSchema(d, &controllerService)
@@ -56,7 +57,7 @@ func ResourceControllerServiceCreate(d *schema.ResourceData, meta interface{}) e
 	}
 	parentGroupId := controllerService.Component.ParentGroupId
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	err = client.CreateControllerService(&controllerService)
 	if err != nil {
 		return fmt.Errorf("Failed to create Controller Service")
@@ -76,7 +77,7 @@ func ResourceControllerServiceCreate(d *schema.ResourceData, meta interface{}) e
 func ResourceControllerServiceRead(d *schema.ResourceData, meta interface{}) error {
 	controllerServiceId := d.Id()
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	controllerService, err := client.GetControllerService(controllerServiceId)
 	if err != nil {
 		return fmt.Errorf("Error retrieving Controller Service: %s", controllerServiceId)
@@ -93,7 +94,7 @@ func ResourceControllerServiceRead(d *schema.ResourceData, meta interface{}) err
 func ResourceControllerServiceUpdate(d *schema.ResourceData, meta interface{}) error {
 	controllerServiceId := d.Id()
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	controllerService, err := client.GetControllerService(controllerServiceId)
 	if err != nil {
 		if "not_found" == err.Error() {
@@ -132,7 +133,7 @@ func ResourceControllerServiceDelete(d *schema.ResourceData, meta interface{}) e
 	controllerServiceId := d.Id()
 	log.Printf("[INFO] Deleting Controller Service: %s", controllerServiceId)
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	controllerService, err := client.GetControllerService(controllerServiceId)
 	if err != nil {
 		if "not_found" == err.Error() {
@@ -155,7 +156,7 @@ func ResourceControllerServiceDelete(d *schema.ResourceData, meta interface{}) e
 func ResourceControllerServiceExists(d *schema.ResourceData, meta interface{}) (bool, error) {
 	controllerServiceId := d.Id()
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	_, err := client.GetControllerService(controllerServiceId)
 	if nil != err {
 		if "not_found" == err.Error() {
@@ -172,7 +173,7 @@ func ResourceControllerServiceExists(d *schema.ResourceData, meta interface{}) (
 
 // Schema Helpers
 
-func ControllerServiceFromSchema(d *schema.ResourceData, controllerService *ControllerService) error {
+func ControllerServiceFromSchema(d *schema.ResourceData, controllerService *nifi.ControllerService) error {
 	v := d.Get("component").([]interface{})
 	if len(v) != 1 {
 		return fmt.Errorf("Exactly one component is required")
@@ -190,7 +191,7 @@ func ControllerServiceFromSchema(d *schema.ResourceData, controllerService *Cont
 	return nil
 }
 
-func ControllerServiceToSchema(d *schema.ResourceData, controllerService *ControllerService) error {
+func ControllerServiceToSchema(d *schema.ResourceData, controllerService *nifi.ControllerService) error {
 	revision := []map[string]interface{}{{
 		"version": controllerService.Revision.Version,
 	}}

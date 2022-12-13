@@ -1,9 +1,10 @@
-package nifi
+package provider
 
 import (
 	"fmt"
 	"log"
 
+	nifi "github.com/glympse/terraform-provider-nifi/nifi"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -41,7 +42,7 @@ func ResourceFunnel() *schema.Resource {
 }
 
 func ResourceFunnelCreate(d *schema.ResourceData, meta interface{}) error {
-	funnel := FunnelStub()
+	funnel := nifi.FunnelStub()
 	funnel.Revision.Version = 0
 
 	err := FunnelFromSchema(meta, d, funnel)
@@ -51,7 +52,7 @@ func ResourceFunnelCreate(d *schema.ResourceData, meta interface{}) error {
 	parentGroupId := funnel.Component.ParentGroupId
 
 	// Create user
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	err = client.CreateFunnel(funnel)
 	if err != nil {
 		return fmt.Errorf("Failed to create Connection")
@@ -67,7 +68,7 @@ func ResourceFunnelCreate(d *schema.ResourceData, meta interface{}) error {
 func ResourceFunnelRead(d *schema.ResourceData, meta interface{}) error {
 	funnelIId := d.Id()
 
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	funnel, err := client.GetFunnel(funnelIId)
 	if err != nil {
 		return fmt.Errorf("Error retrieving Group: %s", funnelIId)
@@ -82,7 +83,7 @@ func ResourceFunnelRead(d *schema.ResourceData, meta interface{}) error {
 }
 
 func ResourceFunnelUpdate(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	client.Lock.Lock()
 	err := ResourceFunnelUpdateInternal(d, meta)
 	defer client.Lock.Unlock()
@@ -97,7 +98,7 @@ func ResourceFunnelUpdateInternal(d *schema.ResourceData, meta interface{}) erro
 	funnelId := d.Id()
 
 	// Refresh funnel details
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	funnel, err := client.GetFunnel(funnelId)
 	if "not_found" == err.Error() {
 		d.SetId("")
@@ -123,7 +124,7 @@ func ResourceFunnelUpdateInternal(d *schema.ResourceData, meta interface{}) erro
 }
 
 func ResourceFunnelDelete(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	log.Printf("[INFO] Deleting Funnel: %s...", d.Id())
 	client.Lock.Lock()
 	err := ResourceFunnelDeleteInternal(d, meta)
@@ -140,7 +141,7 @@ func ResourceFunnelDeleteInternal(d *schema.ResourceData, meta interface{}) erro
 	funnelId := d.Id()
 
 	// Refresh funnel details
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	funnel, err := client.GetFunnel(funnelId)
 	if "not_found" == err.Error() {
 		d.SetId("")
@@ -162,7 +163,7 @@ func ResourceFunnelDeleteInternal(d *schema.ResourceData, meta interface{}) erro
 
 func ResourceFunnelExists(d *schema.ResourceData, meta interface{}) (bool, error) {
 	funnelId := d.Id()
-	client := meta.(*Client)
+	client := meta.(*nifi.Client)
 	_, err := client.GetFunnel(funnelId)
 	if "not_found" == err.Error() {
 		log.Printf("[INFO] Funnel %s no longer exists, removing from state...", funnelId)
@@ -177,7 +178,7 @@ func ResourceFunnelExists(d *schema.ResourceData, meta interface{}) (bool, error
 
 // Schema Helpers
 
-func FunnelFromSchema(meta interface{}, d *schema.ResourceData, funnel *Funnel) error {
+func FunnelFromSchema(meta interface{}, d *schema.ResourceData, funnel *nifi.Funnel) error {
 	v := d.Get("component").([]interface{})
 	if len(v) != 1 {
 		return fmt.Errorf("Exactly one component is required")
@@ -196,7 +197,7 @@ func FunnelFromSchema(meta interface{}, d *schema.ResourceData, funnel *Funnel) 
 	return nil
 }
 
-func FunnelToSchema(d *schema.ResourceData, funnel *Funnel) error {
+func FunnelToSchema(d *schema.ResourceData, funnel *nifi.Funnel) error {
 	revision := []map[string]interface{}{{
 		"version": funnel.Revision.Version,
 	}}

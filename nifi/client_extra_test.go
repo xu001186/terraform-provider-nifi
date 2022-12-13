@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"log"
 	"testing"
-	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -138,73 +136,73 @@ func TestClientGroupCreate(t *testing.T) {
 
 }
 
-func TestUserToSchema(t *testing.T) {
-	r := ResourceUser()
-	timeouts := &schema.ResourceTimeout{
-		Create: schema.DefaultTimeout(40 * time.Minute),
-		Update: schema.DefaultTimeout(80 * time.Minute),
-		Delete: schema.DefaultTimeout(40 * time.Minute),
-	}
+// func TestUserToSchema(t *testing.T) {
+// 	r := ResourceUser()
+// 	timeouts := &schema.ResourceTimeout{
+// 		Create: schema.DefaultTimeout(40 * time.Minute),
+// 		Update: schema.DefaultTimeout(80 * time.Minute),
+// 		Delete: schema.DefaultTimeout(40 * time.Minute),
+// 	}
 
-	r.Timeouts = timeouts
-	d := &schema.ResourceData{}
-	d.SetId("abcdefg")
+// 	r.Timeouts = timeouts
+// 	d := &schema.ResourceData{}
+// 	d.SetId("abcdefg")
 
-	//client := NewClient(config)
-	user1 := User{
-		Revision: Revision{
-			Version: 0,
-		},
-		Component: UserComponent{
-			ParentGroupId: "dummy",
-			Identity:      "test_grp_usr9",
-			Position: &Position{
-				X: 0,
-				Y: 0,
-			},
-		},
-	}
-	UserToSchema(d, &user1)
+// 	//client := NewClient(config)
+// 	user1 := User{
+// 		Revision: Revision{
+// 			Version: 0,
+// 		},
+// 		Component: UserComponent{
+// 			ParentGroupId: "dummy",
+// 			Identity:      "test_grp_usr9",
+// 			Position: &Position{
+// 				X: 0,
+// 				Y: 0,
+// 			},
+// 		},
+// 	}
+// 	UserToSchema(d, &user1)
 
-	actual := d.State()
-	log.Println(actual)
+// 	actual := d.State()
+// 	log.Println(actual)
 
-	log.Println(d.Get("component"))
-}
+// 	log.Println(d.Get("component"))
+// }
 
-func TestGroupToSchema(t *testing.T) {
-	r := ResourceGroup()
-	timeouts := &schema.ResourceTimeout{
-		Create: schema.DefaultTimeout(40 * time.Minute),
-		Update: schema.DefaultTimeout(80 * time.Minute),
-		Delete: schema.DefaultTimeout(40 * time.Minute),
-	}
+// func TestGroupToSchema(t *testing.T) {
+// 	r := ResourceGroup()
+// 	timeouts := &schema.ResourceTimeout{
+// 		Create: schema.DefaultTimeout(40 * time.Minute),
+// 		Update: schema.DefaultTimeout(80 * time.Minute),
+// 		Delete: schema.DefaultTimeout(40 * time.Minute),
+// 	}
 
-	r.Timeouts = timeouts
-	d := &schema.ResourceData{}
-	d.SetId("abcdefg")
+// 	r.Timeouts = timeouts
+// 	d := &schema.ResourceData{}
+// 	d.SetId("abcdefg")
 
-	//client := NewClient(config)
-	group1 := Group{
-		Revision: Revision{
-			Version: 0,
-		},
-		Component: GroupComponent{
-			ParentGroupId: "dummy",
-			Identity:      "test_grp",
-			Position: &Position{
-				X: 0,
-				Y: 0,
-			},
-		},
-	}
-	GroupToSchema(d, &group1)
+// 	//client := NewClient(config)
+// 	group1 := Group{
+// 		Revision: Revision{
+// 			Version: 0,
+// 		},
+// 		Component: GroupComponent{
+// 			ParentGroupId: "dummy",
+// 			Identity:      "test_grp",
+// 			Position: &Position{
+// 				X: 0,
+// 				Y: 0,
+// 			},
+// 		},
+// 	}
+// 	GroupToSchema(d, &group1)
 
-	actual := d.State()
-	log.Println(actual)
+// 	actual := d.State()
+// 	log.Println(actual)
 
-	log.Println(d.Get("component"))
-}
+// 	log.Println(d.Get("component"))
+// }
 
 func TestClientRemoteProcessGroupCreate(t *testing.T) {
 	config := Config{

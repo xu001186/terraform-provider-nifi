@@ -235,12 +235,19 @@ type ProcessorRelationship struct {
 
 type ExecutionNode string
 type SchedulingStrategy string
+type Connection_Component_Type string
 
 const (
-	ALL          ExecutionNode      = "ALL"
-	PRIMARY      ExecutionNode      = "PRIMARY"
-	TIMER_DRIVEN SchedulingStrategy = "TIMER_DRIVEN"
-	CRON_DRIVEN  SchedulingStrategy = "CRON_DRIVEN"
+	ExecutionNode_ALL                            ExecutionNode             = "ALL"
+	ExecutionNode_PRIMARY                        ExecutionNode             = "PRIMARY"
+	SchedulingStrategy_TIMER_DRIVEN              SchedulingStrategy        = "TIMER_DRIVEN"
+	SchedulingStrategy_CRON_DRIVEN               SchedulingStrategy        = "CRON_DRIVEN"
+	Connection_Component_Type_PROCESSOR          Connection_Component_Type = "PROCESSOR"
+	Connection_Component_Type_REMOTE_INPUT_PORT  Connection_Component_Type = "REMOTE_INPUT_PORT"
+	Connection_Component_Type_REMOTE_OUTPUT_PORT Connection_Component_Type = "REMOTE_OUTPUT_PORT"
+	Connection_Component_Type_INPUT_PORT         Connection_Component_Type = "INPUT_PORT"
+	Connection_Component_Type_OUTPUT_PORT        Connection_Component_Type = "OUTPUT_PORT"
+	Connection_Component_Type_FUNNEL             Connection_Component_Type = "FUNNEL"
 )
 
 type ProcessorConfig struct {
