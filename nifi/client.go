@@ -2,6 +2,7 @@ package nifi
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -119,6 +120,30 @@ type Position struct {
 	Y float64 `json:"y"`
 }
 
+type StatusCheckFn func(c *Client) bool
+
+func (c *Client) WaitUtil(max_wait time.Duration, statusCheck StatusCheckFn) error {
+	timeout := time.After(max_wait)
+
+	for {
+		exit := false
+		select {
+		case <-timeout:
+			return fmt.Errorf("time out for waiting the status")
+		default:
+			if statusCheck(c) {
+				exit = true
+			}
+			time.Sleep(1 * time.Second)
+		}
+		if exit {
+			break
+		}
+
+	}
+	return nil
+}
+
 func (c *Client) JsonCall(method string, url string, bodyIn interface{}, bodyOut interface{}) (int, error) {
 	b, _ := json.Marshal(bodyIn)
 	log.Printf("[DEBUG]: request data %s", string(b))
@@ -129,7 +154,9 @@ func (c *Client) JsonCall(method string, url string, bodyIn interface{}, bodyOut
 		json.NewEncoder(buffer).Encode(bodyIn)
 		requestBody = buffer
 	}
-	request, err := http.NewRequest(method, url, requestBody)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second*30))
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, method, url, requestBody)
 	if err != nil {
 		return 0, err
 	}
@@ -166,90 +193,6 @@ func (c *Client) JsonCall(method string, url string, bodyIn interface{}, bodyOut
 	}
 
 	return response.StatusCode, nil
-}
-
-// Controller Service section
-
-type ControllerServiceComponent struct {
-	Id            string                 `json:"id,omitempty"`
-	ParentGroupId string                 `json:"parentGroupId,omitempty"`
-	Name          string                 `json:"name,omitempty"`
-	Type          string                 `json:"type,omitempty"`
-	State         string                 `json:"state,omitempty"`
-	Properties    map[string]interface{} `json:"properties"`
-}
-
-type ControllerService struct {
-	Revision  Revision                   `json:"revision"`
-	Component ControllerServiceComponent `json:"component"`
-}
-
-func (c *Client) CreateControllerService(controllerService *ControllerService) error {
-	url := fmt.Sprintf("%s/process-groups/%s/controller-services",
-		baseurl(c.Config), controllerService.Component.ParentGroupId)
-	_, err := c.JsonCall("POST", url, controllerService, controllerService)
-	if nil != err {
-		return err
-	}
-	c.CleanupNilProperties(controllerService.Component.Properties)
-	return nil
-}
-
-func (c *Client) GetControllerService(controllerServiceId string) (*ControllerService, error) {
-	url := fmt.Sprintf("%s/controller-services/%s",
-		baseurl(c.Config), controllerServiceId)
-	controllerService := ControllerService{}
-	code, err := c.JsonCall("GET", url, nil, &controllerService)
-	if code == 404 {
-		return nil, fmt.Errorf("not_found")
-	}
-	if nil != err {
-		return nil, err
-	}
-	c.CleanupNilProperties(controllerService.Component.Properties)
-	return &controllerService, nil
-}
-
-func (c *Client) UpdateControllerService(controllerService *ControllerService) error {
-	url := fmt.Sprintf("%s/controller-services/%s",
-		baseurl(c.Config), controllerService.Component.Id)
-	_, err := c.JsonCall("PUT", url, controllerService, controllerService)
-	if nil != err {
-		return err
-	}
-	c.CleanupNilProperties(controllerService.Component.Properties)
-	return nil
-}
-
-func (c *Client) DeleteControllerService(controllerService *ControllerService) error {
-	url := fmt.Sprintf("%s/controller-services/%s?version=%d",
-		baseurl(c.Config), controllerService.Component.Id, controllerService.Revision.Version)
-	_, err := c.JsonCall("DELETE", url, nil, nil)
-	return err
-}
-
-func (c *Client) SetControllerServiceState(controllerService *ControllerService, state string) error {
-	stateUpdate := ControllerService{
-		Revision: Revision{
-			Version: controllerService.Revision.Version,
-		},
-		Component: ControllerServiceComponent{
-			Id:    controllerService.Component.Id,
-			State: state,
-		},
-	}
-	url := fmt.Sprintf("%s/controller-services/%s",
-		baseurl(c.Config), controllerService.Component.Id)
-	_, err := c.JsonCall("PUT", url, stateUpdate, controllerService)
-	return err
-}
-
-func (c *Client) EnableControllerService(controllerService *ControllerService) error {
-	return c.SetControllerServiceState(controllerService, "ENABLED")
-}
-
-func (c *Client) DisableControllerService(controllerService *ControllerService) error {
-	return c.SetControllerServiceState(controllerService, "DISABLED")
 }
 
 //User Tennants
