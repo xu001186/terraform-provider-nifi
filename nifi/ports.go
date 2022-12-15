@@ -3,6 +3,7 @@ package nifi
 import (
 	"fmt"
 	"log"
+	"time"
 )
 
 //input port
@@ -170,9 +171,7 @@ func (c *Client) SetPortState(port *Port, state PortState) error {
 		}
 	}
 	port.Component.expectState = state
-	port.statusCheck(c)
-
-	return err
+	return c.WaitUtil(120*time.Second, port.statusCheck)
 }
 
 func (c *Client) StartPort(port *Port) error {
