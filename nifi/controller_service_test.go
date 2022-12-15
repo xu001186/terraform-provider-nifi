@@ -44,12 +44,15 @@ func TestClientControllerService(t *testing.T) {
 
 	err = client.DisableControllerService(&controllerService)
 	assert.Nil(t, err)
+	assert.Equal(t, controllerService.Component.State, ControllerServiceState_DISABLED)
 
 	err = client.EnableControllerService(&controllerService)
 	assert.Nil(t, err)
+	assert.Equal(t, controllerService.Component.State, ControllerServiceState_ENABLED)
 
 	err = client.DisableControllerService(&controllerService)
 	assert.Nil(t, err)
+	assert.Equal(t, controllerService.Component.State, ControllerServiceState_DISABLED)
 
 	err = client.DeleteControllerService(&controllerService)
 	assert.Nil(t, err)

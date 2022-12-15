@@ -20,6 +20,7 @@ type ControllerServiceComponent struct {
 	Name          string                 `json:"name,omitempty"`
 	Type          string                 `json:"type,omitempty"`
 	State         ControllerServiceState `json:"state,omitempty"`
+	expectState   ControllerServiceState
 	Properties    map[string]interface{} `json:"properties"`
 }
 
@@ -88,23 +89,12 @@ func (c *Client) SetControllerServiceState(controllerService *ControllerService,
 	return err
 }
 
-func (cs *ControllerService) enableStatusCheck(c *Client) bool {
-	cs, err := c.GetControllerService(cs.Component.Id)
+func (cs *ControllerService) statusCheck(c *Client) bool {
+	newcs, err := c.GetControllerService(cs.Component.Id)
 	if err != nil {
 		return false
 	}
-	if cs.Component.State != ControllerServiceState_ENABLED {
-		return false
-	}
-	return true
-}
-
-func (cs *ControllerService) disalbeStatusCheck(c *Client) bool {
-	controlService, err := c.GetControllerService(cs.Component.Id)
-	if err != nil {
-		return false
-	}
-	if controlService.Component.State != ControllerServiceState_DISABLED {
+	if cs.Component.expectState != newcs.Component.State {
 		return false
 	}
 	return true
@@ -115,7 +105,8 @@ func (c *Client) EnableControllerService(controllerService *ControllerService) e
 	if err != nil {
 		return err
 	}
-	return c.WaitUtil(120*time.Second, controllerService.enableStatusCheck)
+	controllerService.Component.expectState = ControllerServiceState_ENABLED
+	return c.WaitUtil(120*time.Second, controllerService.statusCheck)
 
 }
 
@@ -124,5 +115,6 @@ func (c *Client) DisableControllerService(controllerService *ControllerService) 
 	if err != nil {
 		return err
 	}
-	return c.WaitUtil(120*time.Second, controllerService.disalbeStatusCheck)
+	controllerService.Component.expectState = ControllerServiceState_DISABLED
+	return c.WaitUtil(120*time.Second, controllerService.statusCheck)
 }
