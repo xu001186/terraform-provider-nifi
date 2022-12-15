@@ -133,3 +133,75 @@ func (c *Client) DropConnectionData(connection *Connection) error {
 
 	return nil
 }
+
+func (c *Client) StopConnectionHand(connectionHand *ConnectionHand) error {
+	handType := connectionHand.Type
+	handId := connectionHand.Id
+	log.Printf("[DEBUG] Stop connection hand %s , %s", handType, handId)
+	switch handType {
+	case "PROCESSOR":
+		processor, err := c.GetProcessor(handId)
+		if err != nil {
+			return c.StopProcessor(processor)
+		} else {
+			return err
+		}
+	case "INPUT_PORT":
+		port, err := c.GetPort(handId, "INPUT_PORT")
+		if err == nil {
+			return c.StopPort(port)
+		} else {
+			log.Printf("Fail to get Port %s", handId)
+			return err
+		}
+	case "OUTPUT_PORT":
+		port, err := c.GetPort(handId, "OUTPUT_PORT")
+		if err == nil {
+			return c.StopPort(port)
+		} else {
+			log.Printf("Fail to get Port %s", handId)
+			return err
+		}
+	case "FUNNEL":
+		log.Printf("No need to stop Funnel")
+		return nil
+	default:
+		log.Fatalf("[WARN]: not supported connection source/target type : %s", handType)
+	}
+	return nil
+}
+
+func (c *Client) StartConnectionHand(connectionHand *ConnectionHand) error {
+	handType := connectionHand.Type
+	handId := connectionHand.Id
+	log.Printf("[DEBUG] Start connection hand %s , %s", handType, handId)
+	switch handType {
+	case "PROCESSOR":
+		processor, err := c.GetProcessor(handId)
+		if err != nil {
+			return c.StartProcessor(processor)
+		} else {
+			return err
+		}
+	case "INPUT_PORT":
+		port, err := c.GetPort(handId, "INPUT_PORT")
+		if err == nil {
+			return c.StartPort(port)
+		} else {
+			return err
+		}
+	case "OUTPUT_PORT":
+		port, err := c.GetPort(handId, "OUTPUT_PORT")
+		if err == nil {
+			return c.StartPort(port)
+		} else {
+			return err
+		}
+	case "FUNNEL":
+		log.Printf("No need to start Funnel")
+		return nil
+	default:
+		log.Printf("[WARN]: not supported connection source/target type : %s", handType)
+	}
+	return nil
+}

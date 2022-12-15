@@ -12,8 +12,8 @@ func setup() *Client {
 		Host:       "yanan001:8443",
 		ApiPath:    "nifi-api",
 		HttpScheme: "https",
-		Username:   "58b28823-bcff-4288-a2fc-22b4701e4368",
-		Password:   "0pBElO7yYCvMGVXWkoZniTzxMZin9Hqf",
+		Username:   "5ac49eed-8bc1-4d61-942d-d8f555f42af0",
+		Password:   "rg/Kr5ljG/0D8gNn/xr6EkGioAFlhsL1",
 	}
 	client, err := NewClient(config)
 	if err != nil {

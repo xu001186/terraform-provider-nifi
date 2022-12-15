@@ -90,7 +90,7 @@ func ResourcePortRead(d *schema.ResourceData, meta interface{}) error {
 	port_type := component["type"].(string)
 
 	client := meta.(*nifi.Client)
-	port, err := client.GetPort(portId, port_type)
+	port, err := client.GetPort(portId, nifi.PortType(port_type))
 	if err != nil {
 		return fmt.Errorf("Error retrieving Port: %s", portId)
 	}
@@ -130,7 +130,7 @@ func ResourcePortUpdateInternal(d *schema.ResourceData, meta interface{}) error 
 	port_type := component["type"].(string)
 	// Refresh processor details
 	client := meta.(*nifi.Client)
-	port, err := client.GetPort(portId, port_type)
+	port, err := client.GetPort(portId, nifi.PortType(port_type))
 	if err != nil {
 		if "not_found" == err.Error() {
 			d.SetId("")
@@ -196,7 +196,7 @@ func ResourcePortDeleteInternal(d *schema.ResourceData, meta interface{}) error 
 	log.Printf("Deleteing port ********************************%s, %s", port_type, portId)
 	// Refresh processor details
 	client := meta.(*nifi.Client)
-	port, err := client.GetPort(portId, port_type)
+	port, err := client.GetPort(portId, nifi.PortType(port_type))
 	if err != nil {
 		if "not_found" == err.Error() {
 			d.SetId("")
@@ -213,7 +213,7 @@ func ResourcePortDeleteInternal(d *schema.ResourceData, meta interface{}) error 
 			return fmt.Errorf("[WARN] Failed to stop Port: %s", portId)
 		} else {
 			//refresh version
-			port, err = client.GetPort(portId, port_type)
+			port, err = client.GetPort(portId, nifi.PortType(port_type))
 			if err != nil {
 				return fmt.Errorf("Failed to reload Port: %s", portId)
 			}
@@ -241,7 +241,7 @@ func ResourcePortExists(d *schema.ResourceData, meta interface{}) (bool, error) 
 	port_type := component["type"].(string)
 
 	client := meta.(*nifi.Client)
-	_, err := client.GetPort(portId, port_type)
+	_, err := client.GetPort(portId, nifi.PortType(port_type))
 	if nil != err {
 		if "not_found" == err.Error() {
 			log.Printf("[INFO] Port %s no longer exists, removing from state...", portId)
@@ -267,7 +267,7 @@ func PortFromSchema(d *schema.ResourceData, port *nifi.Port) error {
 	component := v[0].(map[string]interface{})
 	port.Component.ParentGroupId = component["parent_group_id"].(string)
 	port.Component.Name = component["name"].(string)
-	port.Component.PortType = component["type"].(string)
+	port.Component.PortType = nifi.PortType(component["type"].(string))
 
 	v = component["position"].([]interface{})
 	if len(v) != 1 {
